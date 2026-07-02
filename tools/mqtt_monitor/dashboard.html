@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMA Robot Monitor</title>
+<!-- mqtt.js: 로컬 번들 (CDN 불필요 — 부팅 시 네트워크 미준비 대응) -->
+<script src="mqtt.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f1117;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', monospace;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    color: #7eb8f7;
+    font-size: 1.4rem;
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+  }
+  #status-bar {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #555;
+    margin-bottom: 20px;
+  }
+  #status-bar.connected { color: #4caf50; }
+
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 16px;
+    transition: border-color 0.3s;
+  }
+  .card.heating   { border-color: #ff6b6b; }
+  .card.cooling   { border-color: #4fc3f7; }
+  .card.sustaining{ border-color: #ffcc02; }
+  .card.error     { border-color: #f44336; background: #2a1a1a; }
+
+  /* ── GP 듀얼 상태 테두리: 왼쪽=U1, 오른쪽=U2 ──────────────────── */
+  .card.gp-u1-heat { border-left-color: #ff6b6b; border-left-width: 3px; }
+  .card.gp-u1-sust { border-left-color: #ffcc02; border-left-width: 3px; }
+  .card.gp-u1-cool { border-left-color: #4fc3f7; border-left-width: 3px; }
+  .card.gp-u1-err  { border-left-color: #f44336; border-left-width: 3px; background: #2a1a1a; }
+  .card.gp-u2-heat { border-right-color: #ff6b6b; border-right-width: 3px; }
+  .card.gp-u2-sust { border-right-color: #ffcc02; border-right-width: 3px; }
+  .card.gp-u2-cool { border-right-color: #4fc3f7; border-right-width: 3px; }
+  .card.gp-u2-err  { border-right-color: #f44336; border-right-width: 3px; background: #2a1a1a; }
+
+  /* ── 그룹 구분 레이블 ───────────────────────────────────────────── */
+  .group-label {
+    grid-column: 1 / -1;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    padding: 18px 4px 6px;
+    border-bottom: 1px solid #1e2235;
+    margin-bottom: 2px;
+    color: #555;
+  }
+  .group-label.gf  { color: #ffcc02; }
+  .group-label.gp1 { color: #ff8a65; }
+  .group-label.gp2 { color: #ff8a65; }
+  .group-label.if  { color: #69f0ae; }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .robot-id { font-size: 1.3rem; font-weight: bold; color: #7eb8f7; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .state-badge {
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  .badge-IDLE { background: #2a2d3a; color: #888; }
+  .badge-HEAT { background: #ff6b6b33; color: #ff6b6b; }
+  .badge-SUST { background: #ffcc0233; color: #ffcc02; }
+  .badge-COOL { background: #4fc3f733; color: #4fc3f7; }
+  .badge-ERR  { background: #f4433633; color: #f44336; }
+
+  .cmd-badge {
+    font-size: 0.62rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-left: 4px;
+  }
+  .cmd-badge-user   { background: #1e3a2f; color: #69f0ae; border: 1px solid #69f0ae44; }
+  .cmd-badge-preset { background: #2a1a3a; color: #ce93d8; border: 1px solid #ce93d844; }
+  .cmd-badge-none   { background: #1a1c24; color: #555;    border: 1px solid #333; }
+
+  /* 온도 + sparkline */
+  .temps { display: flex; gap: 10px; margin-bottom: 10px; }
+  .temp-box {
+    flex: 1;
+    background: #12141e;
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+    position: relative;
+  }
+  /* MLX1 = 오렌지(#ff8a65) / MLX2 = 초록(#69f0ae) 고유 색상 */
+  .temp-label { font-size: 0.65rem; color: #555; margin-bottom: 2px; }
+  .temp-value { font-size: 1.4rem; font-weight: bold; color: #e0e0e0; }
+  .temp-value.s1-hot  { color: #ff8a65; }
+  .temp-value.s1-warm { color: #ffcc02; }
+  .temp-value.s2-hot  { color: #69f0ae; }
+  .temp-value.amb     { color: #4fc3f7; font-size: 1rem; }
+
+  /* 변화율 트렌드 */
+  .rate-badge {
+    font-size: 0.65rem;
+    margin-top: 2px;
+    font-weight: bold;
+  }
+  .rate-up   { color: #ff8a65; }
+  .rate-down { color: #4fc3f7; }
+  .rate-flat { color: #555; }
+
+  .bar-wrap {
+    background: #12141e;
+    border-radius: 4px;
+    height: 4px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+    background: #555;
+  }
+  .bar-fill.s1 { background: #ff8a65; }
+  .bar-fill.s2 { background: #69f0ae; }
+
+  /* 통합 차트 */
+  .chart-wrap {
+    margin-top: 10px;
+    border-top: 1px solid #2a2d3a;
+    padding-top: 6px;
+  }
+  .chart-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    color: #444;
+    margin-bottom: 2px;
+  }
+  .chart-canvas { display: block; width: 100%; height: 52px; }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 5px;
+  }
+  .info-row span.val { color: #aaa; }
+
+  /* 손실률 */
+  .loss-ok   { color: #4caf50; }
+  .loss-warn { color: #ffcc02; }
+  .loss-bad  { color: #f44336; }
+
+  .switch-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    background: #333;
+  }
+  .switch-dot.on { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+
+  .last-update {
+    font-size: 0.65rem;
+    color: #333;
+    text-align: right;
+    margin-top: 8px;
+  }
+
+  /* ── 전원 제어 패널 ────────────────── */
+  #preset-panel {
+    background: #0e1018;
+    border: 1px solid #1e2235;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  #preset-panel h3 { color: #ce93d8; font-size: 0.9rem; margin-bottom: 12px; letter-spacing: 1px; }
+  #preset-table, #preset-table-if { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  #preset-table th, #preset-table-if th { color: #555; font-weight: 600; padding: 4px 8px; border-bottom: 1px solid #1e2235; text-align: left; }
+  #preset-table td, #preset-table-if td { padding: 5px 8px; border-bottom: 1px solid #12141e; color: #bbb; }
+  #preset-table td:first-child, #preset-table-if td:first-child { color: #ce93d8; font-weight: bold; font-size: 0.9rem; text-align: center; width: 30px; }
+  #preset-table td:nth-child(2), #preset-table-if td:nth-child(2) { color: #e0e0e0; font-weight: 600; }
+  #preset-table tr:hover td, #preset-table-if tr:hover td { background: #141620; }
+  #preset-table tr.p-stop td, #preset-table-if tr.p-stop td { color: #666; }
+  #preset-table tr.p-seq td, #preset-table-if tr.p-seq td { color: #aaa; font-style: italic; }
+  #preset-table tr.p-seq td:first-child, #preset-table-if tr.p-seq td:first-child { color: #7c4dff; }
+
+  /* ── 관객 감지 패널 ─────────────────── */
+  #audience-panel {
+    margin-top: 16px;
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  #audience-panel h3 { color: #69f0ae; font-size: 0.9rem; margin-bottom: 12px; letter-spacing: 1px; }
+  .cam-feeds { display: flex; gap: 10px; flex-wrap: wrap; }
+  .cam-feed-box { display: flex; flex-direction: column; gap: 4px; }
+  .cam-feed-label { font-size: 0.65rem; color: #555; text-align: center; letter-spacing: 1px; }
+  .cam-stream {
+    width: 320px; height: 180px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #2a2d3a;
+    background: #12141e;
+    transition: border-color 0.4s, box-shadow 0.4s;
+  }
+  .cam-stream.present { border-color: #69f0ae; box-shadow: 0 0 12px #69f0ae44; }
+  .audience-info { display: flex; flex-direction: column; gap: 10px; min-width: 150px; }
+  .aud-badge {
+    font-size: 1.05rem; font-weight: bold;
+    padding: 10px 16px; border-radius: 8px;
+    text-align: center; letter-spacing: 1px;
+    transition: all 0.4s;
+  }
+  .aud-badge.present { background: #69f0ae22; color: #69f0ae; border: 1px solid #69f0ae55; }
+  .aud-badge.absent  { background: #2a2d3a;   color: #444;    border: 1px solid #2a2d3a; }
+  .cam-port-row { display: flex; align-items: center; gap: 6px; }
+  .cam-port-row input {
+    background: #12141e; color: #e0e0e0;
+    border: 1px solid #3a3d4a; border-radius: 6px;
+    padding: 4px 8px; font-size: 0.75rem; width: 72px;
+  }
+  .cam-port-row button {
+    background: #2a2d3a; color: #7eb8f7;
+    border: 1px solid #3a3d4a; border-radius: 6px;
+    padding: 4px 10px; font-size: 0.75rem; cursor: pointer;
+  }
+  .cam-port-row button:hover { background: #3a3d4a; }
+
+  /* ── 로그 ────────────────────────── */
+  #log {
+    margin-top: 16px;
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 8px;
+    padding: 12px;
+    height: 140px;
+    overflow-y: auto;
+    font-size: 0.72rem;
+    color: #555;
+  }
+  #log .line { margin-bottom: 2px; }
+  #log .line.r1  { color: #f48fb1; }
+  #log .line.r2  { color: #ffab91; }
+  #log .line.r3  { color: #ffe082; }
+  #log .line.r4  { color: #a5d6a7; }
+  #log .line.r5  { color: #80deea; }
+  #log .line.r6  { color: #80cbc4; }
+  #log .line.r7  { color: #b39ddb; }
+  #log .line.r8  { color: #ef9a9a; }
+  #log .line.r9  { color: #fff59d; }
+  #log .line.r10 { color: #c5e1a5; }
+  #log .line.r11 { color: #b2ebf2; }
+  #log .line.r12 { color: #f8bbd0; }
+  #log .line.r13 { color: #4dd0e1; }
+  #log .line.r14 { color: #81c784; }
+  #log .line.r15 { color: #fff176; }
+  #log .line.r16 { color: #ef9a9a; }
+  #log .line.r17 { color: #ce93d8; }
+  #log .line.r18 { color: #90caf9; }
+
+  /* ── 센서 오류 로그 패널 ────────────────── */
+  #error-log-panel {
+    margin-top: 16px;
+    background: #180e0e;
+    border: 1px solid #5a1a1a;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .elog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .elog-title { color: #f44336; font-size: 0.9rem; letter-spacing: 1px; font-weight: 600; }
+  #error-log {
+    height: 200px;
+    overflow-y: auto;
+    font-size: 0.72rem;
+    font-family: monospace;
+  }
+  .elog-fault   { color: #f44336; margin-bottom: 3px; }
+  .elog-offline { color: #ffcc02; margin-bottom: 3px; }
+  .elog-loss    { color: #ff8a65; margin-bottom: 3px; }
+  .elog-empty   { color: #555; font-style: italic; }
+  .elog-clear-btn {
+    background: #2a1a1a; color: #f44336;
+    border: 1px solid #5a1a1a; border-radius: 6px;
+    padding: 3px 10px; font-size: 0.72rem; cursor: pointer;
+  }
+  .elog-clear-btn:hover { background: #3a1a1a; }
+
+  /* ── 장애 배너 (카드 내) ──────────────── */
+  .fault-banner {
+    background: #f4433618;
+    border: 1px solid #f4433655;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 0.72rem;
+    color: #f44336;
+    text-align: center;
+    margin: 6px 0 2px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    animation: fault-pulse 1.5s ease-in-out infinite alternate;
+  }
+  @keyframes fault-pulse {
+    from { border-color: #f4433655; background: #f4433618; }
+    to   { border-color: #f44336aa; background: #f4433630; }
+  }
+
+  /* ── 가열 통계 패널 ────────────────── */
+  #heat-stats-panel {
+    margin-top: 16px;
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  #heat-stats-panel h3 { color: #ff8a65; font-size: 0.9rem; margin-bottom: 12px; letter-spacing: 1px; }
+  .hs-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .hs-controls select {
+    background: #12141e; color: #e0e0e0;
+    border: 1px solid #3a3d4a; border-radius: 6px;
+    padding: 5px 10px; font-size: 0.78rem;
+  }
+  .hs-controls button {
+    background: #ff8a6522; color: #ff8a65;
+    border: 1px solid #ff8a6544; border-radius: 6px;
+    padding: 5px 14px; font-size: 0.78rem; cursor: pointer;
+  }
+  .hs-controls button:hover { background: #ff8a6540; }
+  #hs-status { font-size: 0.68rem; color: #444; margin-left: 4px; }
+  #heat-bar-canvas { display: block; width: 100%; border-radius: 6px; background: #0d0f16; }
+  #heat-table-wrap { overflow-x: auto; margin-top: 14px; }
+  #heat-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.73rem; white-space: nowrap;
+  }
+  #heat-table thead tr { border-bottom: 1px solid #2a2d3a; }
+  #heat-table th {
+    color: #555; font-weight: 600; padding: 5px 10px;
+    text-align: right; letter-spacing: 0.5px;
+  }
+  #heat-table th:first-child { text-align: left; }
+  #heat-table td {
+    padding: 5px 10px; border-bottom: 1px solid #12141e;
+    color: #bbb; text-align: right;
+  }
+  #heat-table td:first-child { color: #e0e0e0; font-weight: 600; text-align: left; }
+  #heat-table tr:hover td { background: #141620; }
+  #heat-table td.ht-hot  { color: #ff8a65; font-weight: bold; }
+  #heat-table td.ht-warm { color: #ffcc02; }
+  #heat-table td.ht-none { color: #333; }
+  #heat-table tr.ht-group-if td:first-child { color: #69f0ae; }
+  .hs-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 0.68rem; color: #666; }
+  .hs-legend span { display: flex; align-items: center; gap: 4px; }
+  .hs-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<h1>🤖 SMA Robot Monitor v2</h1>
+<div id="status-bar">MQTT 연결 중...</div>
+<div style="text-align:center;margin-bottom:12px">
+  <button onclick="reconnectMqtt()" style="background:#2a2d3a;color:#7eb8f7;border:1px solid #3a3d4a;border-radius:6px;padding:4px 14px;font-size:0.75rem;cursor:pointer">개수 연결</button>
+  <button onclick="reconnectMqtt(true)" style="background:#2a2d3a;color:#ffcc02;border:1px solid #3a3d4a;border-radius:6px;padding:4px 14px;font-size:0.75rem;cursor:pointer;margin-left:6px">폴백 브로커</button>
+</div>
+<div id="grid"></div>
+
+<!-- 프리셋 참조표 -->
+<div id="heat-stats-panel">
+  <h3>🌡 스프링 가열 통계 — 유닛별 상세</h3>
+  <div class="hs-controls">
+    <select id="hs-period" onchange="loadHeatStats()">
+      <option value="hour">최근 1시간</option>
+      <option value="day" selected>오늘 (24h)</option>
+      <option value="week">이번 주 (7일)</option>
+      <option value="month">이번 달 (30일)</option>
+    </select>
+    <button onclick="loadHeatStats()">↻ 새로고침</button>
+    <span id="hs-status">로딩 중...</span>
+  </div>
+  <canvas id="heat-bar-canvas" height="216"></canvas>
+  <div class="hs-legend">
+    <span><span class="hs-dot" style="background:#ff8a65"></span>가열 (HEAT)</span>
+    <span><span class="hs-dot" style="background:#69f0ae"></span>유지 (SUST)</span>
+    <span style="margin-left:8px;color:#555">• R01–R12 = Golden Petals &nbsp;|&nbsp; R13–R18 = Indeterministic Float</span>
+  </div>
+  <div id="heat-table-wrap">
+    <table id="heat-table">
+      <thead>
+        <tr>
+          <th>로봇</th>
+          <th>가열 횟수</th>
+          <th>총 가열</th>
+          <th title="가열 평균/사이클">평균 가열</th>
+          <th title="최단 가열">최단</th>
+          <th title="최장 가열">최장</th>
+          <th>총 유지</th>
+          <th title="유지 평균/사이클">평균 유지</th>
+          <th title="가열+유지 합계">총 활동</th>
+          <th title="측정 최고 온도 S1">최고 S1</th>
+          <th title="측정 최고 온도 S2">최고 S2</th>
+          <th title="가열중 평균 온도 S1">평균 S1</th>
+          <th title="가열중 평균 온도 S2">평균 S2</th>
+        </tr>
+      </thead>
+      <tbody id="hs-tbody">
+        <tr><td colspan="13" style="text-align:center;color:#333;padding:20px">데이터 로딩 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 프리셋 참조표 (원본) -->
+<div id="preset-panel">
+  <h3>🎬 프리셋 참조 (Golden Petals)</h3>
+  <table id="preset-table">
+    <thead><tr><th>#</th><th>이름</th><th>설명</th><th>T목표</th><th>유지</th><th>팬</th></tr></thead>
+    <tbody>
+      <tr class="p-stop"><td>1</td><td>정지</td><td>모든 동작 중단, IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>2</td><td>유영</td><td>U1·U2 순차 위상 가열, 루프</td><td>38 / 40°C</td><td>20 / 25s</td><td>130 / 155</td></tr>
+      <tr><td>3</td><td>느린 유영</td><td>저온 장시간 유지, 루프</td><td>36 / 36°C</td><td>45 / 45s</td><td>100 / 110</td></tr>
+      <tr><td>4</td><td>교번 유영</td><td>U1↔U2 번갈아 가열 (교번 모드)</td><td>40 / 40°C</td><td>—</td><td>150 / 150</td></tr>
+      <tr><td>5</td><td>활발한 유영</td><td>고온 단시간 반복, 빠른 팬</td><td>42 / 42°C</td><td>8 / 12s</td><td>200 / 220</td></tr>
+      <tr class="p-seq"><td>6</td><td>순차 재생</td><td>2→3→5→… 2분마다 자동 전환</td><td colspan="3">내부 프리셋 순환</td></tr>
+      <tr class="p-seq"><td>7</td><td>랜덤 재생</td><td>2·3·5 중 무작위 선택 반복</td><td colspan="3">내부 프리셋 랜덤</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:16px">🎬 프리셋 참조 (Indeterministic Float)</h3>
+  <table id="preset-table-if">
+    <thead><tr><th>#</th><th>이름</th><th>설명</th><th>T목표</th><th>유지</th><th>팬</th></tr></thead>
+    <tbody>
+      <tr class="p-stop"><td>1</td><td>정지</td><td>모든 동작 중단, IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>2</td><td>유영</td><td>표준 가열·냉각 루프</td><td>40°C</td><td>15s</td><td>150</td></tr>
+      <tr><td>3</td><td>느린 유영</td><td>저온 장시간 유지, 루프</td><td>36°C</td><td>40s</td><td>100</td></tr>
+      <tr><td>4</td><td>힘찬 유영</td><td>고온 단시간 반복, 빠른 팬</td><td>43°C</td><td>5s</td><td>210</td></tr>
+      <tr><td>5</td><td>숨고르기</td><td>중온 장유지, T하한 26°C 고정</td><td>38°C</td><td>30s</td><td>120</td></tr>
+      <tr class="p-seq"><td>6</td><td>순차 재생</td><td>2→3→4→… 2분마다 자동 전환</td><td colspan="3">내부 프리셋 순환</td></tr>
+      <tr class="p-seq"><td>7</td><td>랜덤 재생</td><td>2·3·4 중 무작위 선택 반복</td><td colspan="3">내부 프리셋 랜덤</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div id="log"></div>
+
+<!-- 센서 오류 로그 패널 -->
+<div id="error-log-panel">
+  <div class="elog-header">
+    <span class="elog-title">🚨 센서 오류 로그</span>
+    <button class="elog-clear-btn" onclick="clearErrorLog()">&#128465; 지우기</button>
+  </div>
+  <div id="error-log"><div class="elog-empty">에러 없음 — 센서 오류 발생 시 여기에 표시됩니다</div></div>
+</div>
+
+<!-- 관객 감지 패널 -->
+<div id="audience-panel">
+  <h3>👁 관객 감지 (YOLOv8 · Tapo C220 × 2)</h3>
+  <div class="cam-row" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+    <div class="cam-feeds">
+      <div class="cam-feed-box">
+        <div class="cam-feed-label">CAM 1 · 192.168.50.200</div>
+        <img id="cam-stream-1" src="" alt="cam1" class="cam-stream absent">
+      </div>
+      <div class="cam-feed-box">
+        <div class="cam-feed-label">CAM 2 · 192.168.50.201</div>
+        <img id="cam-stream-2" src="" alt="cam2" class="cam-stream absent">
+      </div>
+    </div>
+    <div class="audience-info">
+      <div class="aud-badge absent" id="aud-badge">— 감지 없음</div>
+      <div style="font-size:0.72rem;color:#555" id="aud-since"></div>
+      <div class="cam-port-row">
+        <input id="cam-port" type="number" value="8181" min="1024" max="65535">
+        <button onclick="applyCamPort()">적용</button>
+      </div>
+      <div style="font-size:0.65rem;color:#444">포트 변경 후 적용 클릭</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BROKER    = 'ws://192.168.50.51:9001/mqtt';   // 로컬 Mosquitto (내부망)
+const BROKER_ALT = 'ws://localhost:9001/mqtt';       // localhost 폴백
+const BROKER_EXT = 'wss://broker.hivemq.com:8884/mqtt';  // 외부 접속용 (ngrok 경유)
+const ROBOT_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+const TARGET_TEMP = 45;
+const SPARK_LEN   = 120;  // ~1분 (약 0.5s/패킷 기준)
+
+// ── 센서 오류 코드 설명 (config.h FAULT_* 참조) ──────────────────
+const FAULT_DESC = {
+  11: 'MLX1 연속 읽기 실패(FAIL)',
+  12: 'MLX1 센서 응답 없음 (FROZEN / 동일값 반복)',
+  13: 'MLX1 초기화 실패(INIT)',
+  21: 'MLX2 연속 읽기 실패(FAIL)',
+  22: 'MLX2 센서 응답 없음 (FROZEN / 동일값 반복)',
+  23: 'MLX2 초기화 실패(INIT)',
+  24: 'MLX2 I2C 버스 복구 실패',
+  31: 'MLX1+MLX2 초기화 실패',
+};
+
+// sparkline 히스토리
+const history = {};
+ROBOT_IDS.forEach(id => { history[id] = { s1: [], s2: [] }; });
+
+// ── 알림 ────────────────────────────────────────────────────────────
+const notifiedFault   = {};
+const notifiedOffline = {};
+
+function requestNotifyPermission() {
+  if ('Notification' in window && Notification.permission === 'default')
+    Notification.requestPermission();
+}
+
+function notify(title, body, tag) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  new Notification(title, { body, tag });
+}
+
+function checkAlerts(r) {
+  const key = r.id;
+  if (r.fault && !notifiedFault[key]) {
+    notifiedFault[key] = true;
+    const fdesc = FAULT_DESC[r.code] || `code=${r.code}`;
+    notify(`\uD83D\uDEA8 R${r.id} \uC13C\uC11C \uC624\uB958!`, `${fdesc} | S1=${r.s1.toFixed(1)}\u00B0 S2=${r.s2.toFixed(1)}\u00B0`, `fault-${key}`);
+    addLog(r.id, `\u26A0 FAULT code=${r.code} \u2014 ${fdesc}`);
+    addErrorLog('elog-fault', `\uD83D\uDEA8 R${r.id} \uC13C\uC11C \uC624\uB958 \u2014 ${fdesc}  |  S1=${r.s1.toFixed(1)}\u00B0C  S2=${r.s2.toFixed(1)}\u00B0C  state=${r.state}/${r.state2}`);
+  }
+  if (!r.fault) notifiedFault[key] = false;
+
+  const since = r.lastSeen ? Math.floor((Date.now() - r.lastSeen) / 1000) : null;
+  if (since !== null && since >= 10 && !notifiedOffline[key]) {
+    notifiedOffline[key] = true;
+    notify(`\uD83D\uDCE1 R${r.id} \uC751\uB2F5 \uC5C6\uC74C`, `${since}\uCD08\uC9F8 \uC2E0\uD638 \uC5C6\uC74C`, `offline-${key}`);
+    addLog(r.id, `\u26A0 OFFLINE ${since}s`);
+    addErrorLog('elog-offline', `\uD83D\uDCE1 R${r.id} \uC751\uB2F5 \uC5C6\uC74C \u2014 ${since}\uCD08 \uACBD\uACFC  (\uB9C8\uC9C0\uB9C9: ${new Date(r.lastSeen).toLocaleTimeString('ko-KR',{hour12:false})})`);
+  }
+  if (since !== null && since < 5) notifiedOffline[key] = false;
+
+  // \uC628\uB3C4 \uAE09\uC0C1\uC2B9
+  if (Math.abs(r.rate1) >= 2.0 || Math.abs(r.rate2) >= 2.0) {
+    const tag = `rate-${key}`;
+    notify(`\uD83C\uDF21\uFE0F R${r.id} \uC628\uB3C4 \uAE09\uBCC0!`, `S1=${r.s1.toFixed(1)}\u00B0(${r.rate1>0?'+':''}${r.rate1.toFixed(2)}\u2103/s) S2=${r.s2.toFixed(1)}\u00B0(${r.rate2>0?'+':''}${r.rate2.toFixed(2)}\u2103/s)`, tag);
+  }
+
+  // \uC190\uC2E4\uB960 \uACBD\uACE0
+  if (r.loss >= 10 && !r._lossWarn) {
+    r._lossWarn = true;
+    addLog(r.id, `\u26A0 \uD328\uD0B7 \uC190\uC2E4 ${r.loss.toFixed(1)}%`);
+    addErrorLog('elog-loss', `\u26A0 R${r.id} \uD328\uD0B7 \uC190\uC2E4 ${r.loss.toFixed(1)}%`);
+  }
+  if (r.loss < 5) r._lossWarn = false;
+}
+
+setInterval(() => ROBOT_IDS.forEach(id => { if (robots[id].lastSeen) checkAlerts(robots[id]); }), 1000);
+
+const robots = {};
+ROBOT_IDS.forEach(id => {
+  robots[id] = { id, state:'--', state2:'--', s1:0, s2:0, amb:0, fault:0, code:0,
+                 el:0, sw:0, swel:0, tmax:0, tmin:0, pkt:0,
+                 mode:0, preset:0,
+                 loss:0, rate1:0, rate2:0, uptime:0, lastSeen:0 };
+});
+
+function fmtUptime(sec) {
+  if (!sec) return '--';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// ── 명령 전송 ────────────────────────────────────────────────────────
+let mqttClient;
+
+// ── 통합 차트 (Y축 고정: 15–60°C, X축 최신이 오른쪽) ───────────────
+const Y_MIN = 20, Y_MAX = 45;
+
+function drawCombinedChart(canvas, data1, data2) {
+  const ctx  = canvas.getContext('2d');
+  const w    = canvas.width;
+  const h    = canvas.height;
+  const range = Y_MAX - Y_MIN;
+  ctx.clearRect(0, 0, w, h);
+
+  // 격자선 (25, 30, 35, 40°C)
+  ctx.lineWidth = 0.5;
+  [25, 30, 35, 40].forEach(t => {
+    const y = h - ((t - Y_MIN) / range) * (h - 6) - 3;
+    ctx.strokeStyle = t === 40 ? '#3a3d4a' : '#252830';
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  });
+
+  // 목표선 45°C = Y_MAX (상단 경계)
+  ctx.strokeStyle = '#ff6b6b44';
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(w, 3); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Y축 레이블
+  ctx.fillStyle = '#444';
+  ctx.font = '7px monospace';
+  ctx.fillText('45', 1, 8);
+  ctx.fillText('35', 1, h - ((35 - Y_MIN) / range) * (h - 6) - 3 + 4);
+  ctx.fillText('20', 1, h - 1);
+
+  // X축 시간 레이블 (오른쪽 끝 = 현재)
+  ctx.fillStyle = '#333';
+  ctx.fillText('now', w - 14, h - 1);
+  ctx.fillText('-60s', 2, h - 1);
+
+  function drawLine(data, color) {
+    if (data.length < 2) return;
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    // 우측 정렬: 최신 데이터가 항상 오른쪽 'now' 위치에 표시
+    const offset = SPARK_LEN - data.length;
+    data.forEach((v, i) => {
+      const x = ((i + offset) / (SPARK_LEN - 1)) * w;
+      const yv = Math.max(Y_MIN, Math.min(Y_MAX, v));
+      const y  = h - ((yv - Y_MIN) / range) * (h - 6) - 3;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  drawLine(data1, '#ff8a65');  // MLX1 오렌지
+  drawLine(data2, '#69f0ae');  // MLX2 초록
+}
+
+// ── 카드 렌더 ────────────────────────────────────────────────────────
+function rateBadge(rate) {
+  const r = parseFloat(rate) || 0;
+  if (r > 0.1)  return `<span class="rate-badge rate-up">▲ +${r.toFixed(2)}℃/s</span>`;
+  if (r < -0.1) return `<span class="rate-badge rate-down">▼ ${r.toFixed(2)}℃/s</span>`;
+  return `<span class="rate-badge rate-flat">─ ${r.toFixed(2)}℃/s</span>`;
+}
+
+function lossClass(loss) {
+  if (loss >= 10) return 'loss-bad';
+  if (loss >= 3)  return 'loss-warn';
+  return 'loss-ok';
+}
+
+function renderCard(r) {
+  const isGP = r.id <= 12;
+  const since = r.lastSeen ? Math.floor((Date.now() - r.lastSeen) / 1000) : null;
+  const alive = since !== null && since < 5;
+  // 카드 테두리 클래스: GP=왼쪽(U1)/오른쪽(U2) 분리, IF=단일
+  function gpStateCls(s) {
+    if (s === 'HEAT') return 'heat'; if (s === 'SUST') return 'sust';
+    if (s === 'COOL') return 'cool'; if (s === 'ERR!') return 'err';
+    return 'idle';
+  }
+  let cardClasses = '';
+  if (alive) {
+    if (isGP) {
+      cardClasses = `gp-u1-${gpStateCls(r.state)} gp-u2-${gpStateCls(r.state2)}`;
+    } else {
+      const _m = {HEAT:'heating', COOL:'cooling', SUST:'sustaining', 'ERR!':'error'};
+      cardClasses = _m[r.state] || '';
+    }
+  }
+  const s1hot  = r.s1 >= TARGET_TEMP - 2;
+  const s1warm = r.s1 >= TARGET_TEMP * 0.7;
+  const s2hot  = r.s2 >= TARGET_TEMP - 2;
+  const s1pct  = Math.min(100, (r.s1 / TARGET_TEMP) * 100).toFixed(1);
+  const s2pct  = Math.min(100, (r.s2 / TARGET_TEMP) * 100).toFixed(1);
+  const lc     = lossClass(r.loss);
+  const PRESET_NAMES_GP = {1:'정지',2:'유영',3:'느린 유영',4:'교번',5:'활발한',6:'순차',7:'랜덤'};
+  const PRESET_NAMES_IF = {1:'정지',2:'유영',3:'느린 유영',4:'힘찬 유영',5:'숨고르기',6:'순차',7:'랜덤'};
+  const PRESET_NAMES = r.id >= 13 ? PRESET_NAMES_IF : PRESET_NAMES_GP;
+  const pname    = r.mode === 2 ? (PRESET_NAMES[r.preset] || '') : '';
+  const modeStr  = r.mode === 2 ? `P${r.preset}${pname ? ' '+pname : ''}` : r.mode === 1 ? 'USER' : '--';
+  const modeCls  = r.mode === 2 ? 'cmd-badge-preset' : r.mode === 1 ? 'cmd-badge-user' : 'cmd-badge-none';
+
+  return `
+  <div class="card ${cardClasses}" id="card-${r.id}">
+    <div class="card-header">
+      <span class="robot-id">R${r.id}</span>
+      <div class="header-right">
+        <span class="${lc}" style="font-size:0.7rem">PKT loss: ${r.loss.toFixed(1)}%</span>
+        <span class="cmd-badge ${modeCls}">${modeStr}</span>
+      </div>
+    </div>
+    ${!isGP ? `<div style="text-align:center;padding:2px 0 4px"><span class="state-badge badge-${r.state}" style="font-size:0.82rem;padding:3px 20px">${r.state||'--'}</span></div>` : ''}
+    <div class="temps">
+      <div class="temp-box">
+        <div class="temp-label"><span style="color:#ff8a65">●</span> ${isGP ? 'U1' : 'MLX1'}</div>
+        ${isGP ? `<span class="state-badge badge-${r.state}" style="font-size:0.65rem;padding:2px 6px;margin-bottom:2px;display:inline-block">${r.state||'--'}</span>` : '<span style="display:inline-block;height:22px"></span>'}
+        <div class="temp-value ${s1hot?'s1-hot':s1warm?'s1-warm':''}">${r.s1.toFixed(1)}°</div>
+        ${rateBadge(r.rate1)}
+        <div class="bar-wrap"><div class="bar-fill s1" style="width:${s1pct}%"></div></div>
+      </div>
+      <div class="temp-box">
+        <div class="temp-label"><span style="color:#69f0ae">●</span> ${isGP ? 'U2' : 'MLX2'}</div>
+        ${isGP ? `<span class="state-badge badge-${r.state2}" style="font-size:0.65rem;padding:2px 6px;margin-bottom:2px;display:inline-block">${r.state2||'--'}</span>` : '<span style="display:inline-block;height:22px"></span>'}
+        <div class="temp-value ${s2hot?'s2-hot':''}">${r.s2.toFixed(1)}°</div>
+        ${rateBadge(r.rate2)}
+        <div class="bar-wrap"><div class="bar-fill s2" style="width:${s2pct}%"></div></div>
+      </div>
+      <div class="temp-box">
+        <div class="temp-label">AMB</div>
+        <div class="temp-value amb">${r.amb.toFixed(1)}°</div>
+        <div style="margin-top:4px;font-size:0.65rem;color:#555">T목표</div>
+        <div style="font-size:0.9rem;color:#ff6b6b">${r.tmax > 0 ? r.tmax+'°C' : '--'}</div>
+        <div style="font-size:0.65rem;color:#555;margin-top:2px">T하한</div>
+        <div style="font-size:0.9rem;color:#4fc3f7">${r.tmin > 0 ? r.tmin+'°C' : 'amb'}</div>
+      </div>
+    </div>
+    ${r.fault ? `<div class="fault-banner">&#x1F6A8; \uC13C\uC11C \uC624\uB958 \u2014 ${FAULT_DESC[r.code] || 'code='+r.code}</div>` : ''}
+    <div class="info-row">
+      ${isGP
+        ? `<span>U1 경과</span><span class="val">${r.el}s</span><span>U2 경과</span><span class="val">${r.swel}s</span>`
+        : `<span><span class="switch-dot ${r.sw?'on':''}"></span>SW</span><span class="val">${r.sw ? '감지' : '없음'}</span><span>경과</span><span class="val">${r.el}s</span>`}
+      <span>fault</span>
+      <span class="val" style="color:${r.fault?'#f44336':'#4caf50'}">${r.fault ? 'ERR('+r.code+')' : 'OK'}</span>
+    </div>
+    <div class="info-row">
+      <span>pkt#</span>
+      <span class="val">${r.pkt}</span>
+      ${isGP ? '' : `<span>swEl</span><span class="val">${r.swel}s</span>`}
+      <span>업타임</span>
+      <span class="val" style="color:#7eb8f7">${fmtUptime(r.uptime)}</span>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-label">
+        <span><span style="color:#ff8a65">─</span> MLX1 &nbsp; <span style="color:#69f0ae">─</span> MLX2</span>
+        <span style="color:#ff6b6b44">- - 45°C</span>
+      </div>
+      <canvas class="chart-canvas" id="chart-${r.id}" width="400" height="52"></canvas>
+    </div>
+    <div class="last-update">${since !== null
+      ? (alive ? `${since}s ago` : `<span style="color:#f44336">⚠ ${since}s ago</span>`)
+      : '수신 없음'}</div>
+  </div>`;
+}
+
+function updateSparklines() {
+  ROBOT_IDS.forEach(id => {
+    const c = document.getElementById(`chart-${id}`);
+    if (c) drawCombinedChart(c, history[id].s1, history[id].s2);
+  });
+}
+
+const GROUPS = [
+  { label: '황금빛 꽃  [R1–R8]',    cls: 'gf',  ids: [1,2,3,4,5,6,7,8] },
+  { label: '황금빛 꽃잎 1  [R9–R10]', cls: 'gp1', ids: [9,10] },
+  { label: '황금빛 꽃잎 2  [R11–R12]',cls: 'gp2', ids: [11,12] },
+  { label: '비결정적 유영  [R13–R18]', cls: 'if',  ids: [13,14,15,16,17,18] },
+];
+
+function renderAll() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = GROUPS.map(g =>
+    `<div class="group-label ${g.cls}">${g.label}</div>` +
+    g.ids.map(id => renderCard(robots[id])).join('')
+  ).join('');
+  updateSparklines();
+}
+renderAll();
+setInterval(renderAll, 1000);
+setInterval(updateSparklines, 500);  // 스파크라인 별도 갱신 (500ms)
+
+// ── 로그 ────────────────────────────────────────────────────────────
+function addLog(id, text) {
+  const log = document.getElementById('log');
+  const ts  = new Date().toLocaleTimeString('ko-KR', {hour12:false});
+  const div = document.createElement('div');
+  div.className = `line r${id}`;
+  div.textContent = `[${ts}][R${id}] ${text}`;
+  log.appendChild(div);
+  if (log.children.length > 300) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ── 에러 전용 로그 (쿼리티 이벤트만 표시, 최신이 위) ──────────────────
+function addErrorLog(cls, text) {
+  const el = document.getElementById('error-log');
+  if (!el) return;
+  // 첫 이벤트 발생 시 고정안내 메시지 제거
+  if (el.children.length === 1 && el.firstChild.classList.contains('elog-empty')) {
+    el.innerHTML = '';
+  }
+  const ts = new Date().toLocaleTimeString('ko-KR', {hour12:false});
+  const div = document.createElement('div');
+  div.className = cls;
+  div.textContent = `[${ts}] ${text}`;
+  el.insertBefore(div, el.firstChild);  // 최신이 위
+  if (el.children.length > 200) el.removeChild(el.lastChild);
+}
+
+function clearErrorLog() {
+  const el = document.getElementById('error-log');
+  if (el) el.innerHTML = '<div class="elog-empty">로그 지워짐</div>';
+}
+
+// ── MQTT ────────────────────────────────────────────────────────────
+const bar = document.getElementById('status-bar');
+let _connectTimer = null;
+let _usingAlt = false;
+
+function connectMqtt(useAlt) {
+  _usingAlt = !!useAlt;
+  // 로컬망이면 로컬 브로커, 외부망이면 HiveMQ
+  const isLocalNet = ['', 'localhost', '127.0.0.1'].includes(location.hostname)
+    || /^192\.168\./.test(location.hostname) || /^10\./.test(location.hostname);
+  let url;
+  if (isLocalNet) {
+    url = useAlt ? BROKER_ALT : BROKER;
+  } else {
+    url = BROKER_EXT;
+  }
+  const brokerLabel = isLocalNet ? (useAlt ? 'localhost:9001' : '192.168.50.51:9001') : 'hivemq(ext)';
+  bar.textContent = `MQTT 연결 중... (${brokerLabel})`;
+  bar.className = '';
+
+  if (mqttClient) { try { mqttClient.end(true); } catch(e){} }
+
+  clearTimeout(_connectTimer);
+  _connectTimer = setTimeout(() => {
+    bar.textContent = `⏱ MQTT 연결 중... 자동 재시도 중 (${brokerLabel})`;
+  }, 12000);
+
+  mqttClient = mqtt.connect(url, {
+    clientId      : 'sma_web_' + Math.random().toString(16).slice(2),
+    username      : 'sema_north',
+    password      : 'som123',
+    keepalive     : 30,
+    connectTimeout: 10000,
+    reconnectPeriod: 5000,
+    clean         : true,
+  });
+
+  mqttClient.on('connect', () => {
+    clearTimeout(_connectTimer);
+    const broker = _usingAlt ? 'broker.emqx.io' : 'broker.hivemq.com';
+    bar.textContent = `✅ MQTT 연결됨 — ${broker}`;
+    bar.className = 'connected';
+    ROBOT_IDS.forEach(id => mqttClient.subscribe(`sma/robot/${id}/log`));
+    mqttClient.subscribe('audience/present');
+    requestNotifyPermission();
+  });
+
+  mqttClient.on('error', e => {
+    clearTimeout(_connectTimer);
+    bar.textContent = `❌ MQTT 오류: ${e.message || e} — 재연결 버튼을 눌러주세요`;
+    bar.className = '';
+    console.error('MQTT error:', e);
+  });
+
+  mqttClient.on('close', () => {
+    bar.textContent = `⚠ MQTT 연결 끊김 — 재연결 시도 중...`;
+    bar.className = '';
+  });
+
+  mqttClient.on('offline', () => {
+    bar.textContent = '⚠ MQTT 오프라인';
+    bar.className = '';
+  });
+
+  mqttClient.on('reconnect', () => {
+    bar.textContent = `🔄 MQTT 재연결 중... (${_usingAlt ? 'emqx' : 'hivemq'})`;
+    bar.className = '';
+  });
+
+  mqttClient.on('message', (topic, payload) => {
+    const text = payload.toString().trim();
+
+    // ── 관객 감지 토픽 ────────────────────────────────────────────
+    if (topic === 'audience/present') {
+      const present = text === 'true';
+      const badge   = document.getElementById('aud-badge');
+      const stream1 = document.getElementById('cam-stream-1');
+      const stream2 = document.getElementById('cam-stream-2');
+      const since   = document.getElementById('aud-since');
+      if (present) {
+        badge.textContent  = '● PRESENT';
+        badge.className    = 'aud-badge present';
+        stream1.className  = 'cam-stream present';
+        stream2.className  = 'cam-stream present';
+        since.textContent  = '';
+      } else {
+        badge.textContent  = '○ ABSENT';
+        badge.className    = 'aud-badge absent';
+        stream1.className  = 'cam-stream absent';
+        stream2.className  = 'cam-stream absent';
+        since.textContent  = '';
+      }
+      return;
+    }
+
+    const parts = text.split(';');
+    const id = parseInt(parts[0]);
+    if (!robots[id]) return;
+
+    const kv = {};
+    parts.slice(1).forEach(p => { const [k, v] = p.split('='); kv[k] = v; });
+
+  robots[id] = {
+    id,
+    state : kv.state  || '--',
+    state2: kv.state2 || '--',
+    s1    : parseFloat(kv.s1    || 0),
+    s2    : parseFloat(kv.s2    || 0),
+    amb   : parseFloat(kv.amb   || 0),
+    fault : parseInt(kv.fault   || 0),
+    code  : parseInt(kv.code    || 0),
+    el    : parseInt(kv.el      || 0),
+    sw    : parseInt(kv.sw      || 0),
+    swel  : parseInt(kv.swel    || 0),
+    tmax  : parseInt(kv.tmax    || 0),
+    tmin  : parseInt(kv.tmin    || 0),
+    mode  : parseInt(kv.mode    || 0),
+    preset: parseInt(kv.preset  || 0),
+    pkt   : parseInt(kv.pkt     || 0),
+    loss  : parseFloat(kv.loss  || 0),
+    rate1 : parseFloat(kv.rate1 || 0),
+    rate2 : parseFloat(kv.rate2 || 0),
+    uptime: parseInt(kv.uptime  || 0),
+    lastSeen: Date.now(),
+    _lossWarn: robots[id]._lossWarn || false,
+  };
+  // sparkline 히스토리 업데이트
+  const h = history[id];
+  h.s1.push(robots[id].s1); if (h.s1.length > SPARK_LEN) h.s1.shift();
+  h.s2.push(robots[id].s2); if (h.s2.length > SPARK_LEN) h.s2.shift();
+
+  checkAlerts(robots[id]);
+  addLog(id, text);
+  });
+}
+
+function reconnectMqtt(useAlt) { connectMqtt(useAlt); }
+
+// mqtt.js 로드 확인 후 연결
+if (typeof mqtt === 'undefined') {
+  bar.textContent = '❌ mqtt.js 로드 실패 — 인터넷 연결 확인';
+} else {
+  connectMqtt(false);
+}
+
+// ── 웹캠 스트림 ──────────────────────────────────────────────────
+// 로컬(localhost/192.168.x.x/file://)이면 MJPEG, 외부(ngrok 등)면 스냅샷 폴링
+function isLocal() {
+  const h = window.location.hostname;
+  return h === '' || h === 'localhost' || h === '127.0.0.1' || /^192\.168\./.test(h) || /^10\./.test(h);
+}
+function localHost() {
+  const h = window.location.hostname;
+  return (h === '') ? 'localhost' : h;  // file:// → localhost
+}
+
+let _snapTimers = {};
+function stopSnapPolling() {
+  Object.values(_snapTimers).forEach(clearTimeout);
+  _snapTimers = {};
+}
+
+function startSnapPolling(host, port) {
+  stopSnapPolling();
+  [['cam-stream-1','snapshot1'],['cam-stream-2','snapshot2']].forEach(([id, ep]) => {
+    const img = document.getElementById(id);
+    function refresh() {
+      const t = Date.now();
+      const newImg = new Image();
+      newImg.onload = () => { img.src = newImg.src; _snapTimers[id] = setTimeout(refresh, 150); };
+      newImg.onerror = () => { _snapTimers[id] = setTimeout(refresh, 1000); };
+      newImg.src = `https://${host}/${ep}.jpeg?t=${t}`;
+    }
+    refresh();
+  });
+}
+
+function applyCamPort() {
+  const port = parseInt(document.getElementById('cam-port').value) || 8181;
+  const host = localHost();
+  if (isLocal()) {
+    // 로컬: MJPEG 스트림 직접 사용 (실패 시 5초마다 자동 재시도)
+    stopSnapPolling();
+    function loadMjpeg(imgId, ep) {
+      const img = document.getElementById(imgId);
+      img.onerror = () => { _snapTimers[imgId] = setTimeout(() => loadMjpeg(imgId, ep), 5000); };
+      img.src = `http://${host}:${port}/${ep}?t=${Date.now()}`;
+    }
+    loadMjpeg('cam-stream-1', 'stream1.mjpeg');
+    loadMjpeg('cam-stream-2', 'stream2.mjpeg');
+  } else {
+    // 외부(ngrok 등): 스냅샷 폴링 사용 (프록시 버퍼링 우회)
+    startSnapPolling(host, port);
+  }
+}
+// 페이지 로드 시 자동 연결
+applyCamPort();
+
+// ═══════════════════════════════════════════════════════════════════════
+//  🌡 가열 통계
+// ═══════════════════════════════════════════════════════════════════════
+
+function _fmt(s) {
+  // 초 → "Xm Ys" / "Xs" / "—"
+  if (!s || s <= 0) return '—';
+  const m   = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return m > 0 ? m + '분 ' + sec + '초' : sec + '초';
+}
+
+function _tempClass(v) {
+  if (!v || v <= 0) return 'ht-none';
+  if (v >= 42)      return 'ht-hot';
+  if (v >= 35)      return 'ht-warm';
+  return '';
+}
+
+function renderHeatBar(robots) {
+  const canvas = document.getElementById('heat-bar-canvas');
+  if (!canvas) return;
+  const W   = canvas.offsetWidth || 600;
+  canvas.width  = W;
+  canvas.height = 216;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, 216);
+
+  if (!robots.length) {
+    ctx.fillStyle = '#333';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('데이터 없음', W / 2, 108);
+    return;
+  }
+
+  const maxTotal = Math.max.apply(null, robots.map(function(r){ return r.total_s; }).concat([1]));
+  const labelW = 90;
+  const valW   = 52;
+  const barAreaW = W - labelW - valW - 8;
+  const n   = robots.length;
+  const gap = 2;
+  const barH = Math.max(4, Math.floor((216 - 24 - gap * (n - 1)) / n));
+
+  robots.forEach(function(r, i) {
+    const y     = i * (barH + gap) + 4;
+    const isIF  = r.robot_id >= 13;
+    const heatW = maxTotal > 0 ? (r.heat_s / maxTotal) * barAreaW : 0;
+    const sustW = maxTotal > 0 ? (r.sust_s / maxTotal) * barAreaW : 0;
+
+    // 배경
+    ctx.fillStyle = '#0d0f16';
+    ctx.fillRect(labelW, y, barAreaW, barH);
+
+    // 가열 바 (HEAT)
+    if (heatW > 0) {
+      ctx.fillStyle = isIF ? '#ef6c0088' : '#ff8a6588';
+      ctx.fillRect(labelW, y, heatW, barH);
+    }
+    // 유지 바 (SUST)
+    if (sustW > 0) {
+      ctx.fillStyle = isIF ? '#00897b55' : '#69f0ae44';
+      ctx.fillRect(labelW + heatW, y, sustW, barH);
+    }
+
+    // 로봇 라벨
+    ctx.fillStyle = isIF ? '#69f0ae' : '#aaa';
+    ctx.font = Math.min(barH - 2, 10) + 'px monospace';
+    ctx.textAlign = 'right';
+    const shortName = r.name.replace('Golden Petals ', 'GP ').replace('Indet. Float ', 'IF ');
+    ctx.fillText(shortName, labelW - 4, y + barH * 0.78);
+
+    // 가열 횟수 + 합계 시간 표시
+    ctx.fillStyle = '#777';
+    ctx.textAlign = 'left';
+    ctx.font = Math.min(barH - 2, 9) + 'px monospace';
+    const label = r.heat_cycles + '회  ' + _fmt(r.total_s);
+    ctx.fillText(label, labelW + heatW + sustW + 5, y + barH * 0.78);
+  });
+}
+
+function renderHeatTable(robots) {
+  const tbody = document.getElementById('hs-tbody');
+  if (!robots.length) {
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#333;padding:20px">이 기간에 가열 기록이 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = robots.map(function(r) {
+    const ifRow = r.robot_id >= 13 ? ' ht-group-if' : '';
+    const td = function(v, cls) {
+      return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + v + '</td>';
+    };
+    return '<tr class="' + ifRow + '">'
+      + td(r.name)
+      + td(r.heat_cycles > 0 ? r.heat_cycles + '회' : '—')
+      + td(_fmt(r.heat_s))
+      + td(_fmt(r.avg_heat_s))
+      + td(_fmt(r.min_heat_s))
+      + td(_fmt(r.max_heat_s))
+      + td(_fmt(r.sust_s))
+      + td(_fmt(r.avg_sust_s))
+      + td(_fmt(r.total_s))
+      + td(r.max_s1 > 0 ? r.max_s1 + '°C' : '—', _tempClass(r.max_s1))
+      + td(r.max_s2 > 0 ? r.max_s2 + '°C' : '—', _tempClass(r.max_s2))
+      + td(r.avg_s1 > 0 ? r.avg_s1 + '°C' : '—', _tempClass(r.avg_s1))
+      + td(r.avg_s2 > 0 ? r.avg_s2 + '°C' : '—', _tempClass(r.avg_s2))
+      + '</tr>';
+  }).join('');
+}
+
+function loadHeatStats() {
+  const period = document.getElementById('hs-period').value;
+  const status = document.getElementById('hs-status');
+  status.textContent = '로딩 중...';
+  fetch('/api/stats?period=' + period)
+    .then(function(res){ return res.json(); })
+    .then(function(data) {
+      if (data.error) { status.textContent = '오류: ' + data.error; return; }
+      const robots = (data.heat && data.heat.by_robot) || [];
+      renderHeatBar(robots);
+      renderHeatTable(robots);
+      const now = new Date();
+      status.textContent = '갱신: ' + now.toLocaleTimeString() + ' · 총 ' + robots.length + '대';
+    })
+    .catch(function() { status.textContent = '통신 오류 — bridge 서비스 확인 필요'; });
+}
+
+loadHeatStats();
+setInterval(loadHeatStats, 120000); // 2분마다 자동 갱신
+</script>
+</body>
+</html>

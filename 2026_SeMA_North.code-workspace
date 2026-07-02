@@ -1,0 +1,42 @@
+{
+  "folders": [
+    {
+      "name": "Indeterministic_Float",
+      "path": "Indeterministic_Float"
+    },
+    {
+      "name": "Golden_Petals",
+      "path": "Golden_Petals"
+    },
+    {
+      "name": "host",
+      "path": "host"
+    },
+    {
+      "name": "tools",
+      "path": "tools"
+    },
+    {
+      "name": "audio_shield",
+      "path": "audio_shield"
+    },
+    {
+      "name": "light",
+      "path": "light"
+    },
+    {
+      "path": "tools/sensor_test"
+    },
+    {
+      "name": "hardware_test",
+      "path": "hardware_test"
+    },
+    {
+      "name": "hidden_sound_path",
+      "path": "hidden_sound_path"
+    }
+  ],
+  "settings": {
+    "platformio-ide.projectsDir": ""
+  }
+}

@@ -1,0 +1,8 @@
+.venv/
+tools/mqtt_monitor/.env
+tools/mqtt_monitor/bridge.log
+tools/mqtt_monitor/sma_data.db
+tools/mqtt_monitor/*.log
+host/logs/
+**/__pycache__/
+light/previous_code/
