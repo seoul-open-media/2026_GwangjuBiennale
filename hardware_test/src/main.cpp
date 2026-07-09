@@ -24,8 +24,8 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_MLX90614.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+// #include <Adafruit_GFX.h>
+// #include <Adafruit_SSD1306.h>
 
 // ── 핀 ──────────────────────────────────────────────────────────────
 #define SMA_A1_PIN  2
@@ -43,9 +43,6 @@ static const uint8_t MOSFET_COUNT = sizeof(MOSFET_PINS);
 
 // ── XBee ─────────────────────────────────────────────────────────────
 #define XBEE       Serial1
-#define PKT_LEN    16
-#define START_B    255
-#define END_B      254
 
 // ── 상수 ────────────────────────────────────────────────────────────
 #define BLINK_PERIOD_MS  3000u   // ON↔OFF 토글 주기(ms)
@@ -53,102 +50,53 @@ static const uint8_t MOSFET_COUNT = sizeof(MOSFET_PINS);
 // ── 디바이스 ────────────────────────────────────────────────────────
 static Adafruit_MLX90614 mlx1;
 static Adafruit_MLX90614 mlx2;
-static Adafruit_SSD1306  display(128, 64, &Wire3, -1);
+// static Adafruit_SSD1306  display(128, 64, &Wire3, -1);  // OLED 배선 확인 후 활성화
 
 static bool mlx1Ok = false;
 static bool mlx2Ok = false;
-static bool oledOk = false;
+// static bool oledOk = false;
 
 // ── XBee 수신 버퍼 ──────────────────────────────────────────────────
-static uint8_t  rxBuf[PKT_LEN];
-static uint8_t  rxIdx    = 0;
-static uint32_t rxCount  = 0;          // 수신 패킷 카운터
-static uint32_t echoCount = 0;         // 에코 카운터
-static char     lastPktStr[32] = "--"; // OLED 표시용 마지막 패킷 요약
+static uint32_t rxByteCount = 0;   // 수신 바이트 카운터
 
-// ── XBee 패킷 처리 ──────────────────────────────────────────────────
+// ── XBee 처리: 수신 바이트 → Serial 출력 + 에코 ─────────────────────
 static void processXBee() {
   while (XBEE.available()) {
     uint8_t b = XBEE.read();
+    rxByteCount++;
 
-    if (rxIdx == 0 && b != START_B) continue;  // START 바이트 대기
+    // Serial 출력 (hex + dec)
+    Serial.print("[XBEE #"); Serial.print(rxByteCount);
+    Serial.print("] 0x"); Serial.print(b, HEX);
+    Serial.print(" (");    Serial.print(b, DEC);
+    Serial.println(")");
 
-    rxBuf[rxIdx++] = b;
-
-    if (rxIdx == PKT_LEN) {
-      rxIdx = 0;
-      if (rxBuf[PKT_LEN - 1] != END_B) {
-        Serial.println("[XBEE] bad END, drop");
-        return;
-      }
-
-      rxCount++;
-      Serial.print("[XBEE RX #"); Serial.print(rxCount); Serial.print("] ");
-      for (uint8_t i = 0; i < PKT_LEN; i++) {
-        Serial.print(rxBuf[i]); Serial.print(' ');
-      }
-      Serial.println();
-
-      // OLED 요약: id / mode / tempTarget / sustainSec / fanSpeed
-      snprintf(lastPktStr, sizeof(lastPktStr),
-               "id=%d m=%d t=%d s=%d f=%d",
-               rxBuf[1], rxBuf[2], rxBuf[3], rxBuf[4], rxBuf[5]);
-
-      // 코디네이터에게 패킷 그대로 에코
-      XBEE.write(rxBuf, PKT_LEN);
-      echoCount++;
-      Serial.print("[XBEE ECHO #"); Serial.print(echoCount); Serial.println("]");
-    }
+    // 코디네이터에게 바이트 그대로 에코
+    XBEE.write(b);
   }
 }
 
-// ── OLED 헬퍼 ───────────────────────────────────────────────────────
-static void oledDraw(bool mosfetOn, float obj1, float obj2, float amb1, float amb2) {
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-
-  // row0: MOS 상태 + 경과 시간
-  display.setCursor(0, 0);
-  display.print("MOS:");
-  display.print(mosfetOn ? "ON " : "OFF");
-  display.print(" t=");
-  display.print(millis() / 1000UL);
-  display.println("s");
-
-  display.drawFastHLine(0, 9, 128, SSD1306_WHITE);
-
-  // row1: MLX1
-  display.setCursor(0, 11);
-  if (mlx1Ok) {
-    display.print("S1 Obj:"); display.print(obj1, 1);
-    display.print(" A:");     display.print(amb1, 1); display.println("C");
-  } else {
-    display.println("S1: NOT FOUND");
-  }
-
-  // row2: MLX2
-  display.setCursor(0, 20);
-  if (mlx2Ok) {
-    display.print("S2 Obj:"); display.print(obj2, 1);
-    display.print(" A:");     display.print(amb2, 1); display.println("C");
-  } else {
-    display.println("S2: NOT FOUND");
-  }
-
-  display.drawFastHLine(0, 29, 128, SSD1306_WHITE);
-
-  // row3: XBee 카운터
-  display.setCursor(0, 31);
-  display.print("XB RX:"); display.print(rxCount);
-  display.print(" ECHO:"); display.println(echoCount);
-
-  // row4: 마지막 수신 패킷 요약
-  display.setCursor(0, 40);
-  display.println(lastPktStr);
-
-  display.display();
-}
+// ── OLED 헬퍼 — 배선 확인 후 주석 해제 ────────────────────────────
+// static void oledDraw(bool mosfetOn, float obj1, float obj2, float amb1, float amb2) {
+//   display.clearDisplay();
+//   display.setTextColor(SSD1306_WHITE);
+//   display.setTextSize(1);
+//   display.setCursor(0, 0);
+//   display.print("MOS:"); display.print(mosfetOn ? "ON " : "OFF");
+//   display.print(" t="); display.print(millis() / 1000UL); display.println("s");
+//   display.drawFastHLine(0, 9, 128, SSD1306_WHITE);
+//   display.setCursor(0, 11);
+//   if (mlx1Ok) { display.print("S1 Obj:"); display.print(obj1,1); display.print(" A:"); display.print(amb1,1); display.println("C"); }
+//   else { display.println("S1: NOT FOUND"); }
+//   display.setCursor(0, 20);
+//   if (mlx2Ok) { display.print("S2 Obj:"); display.print(obj2,1); display.print(" A:"); display.print(amb2,1); display.println("C"); }
+//   else { display.println("S2: NOT FOUND"); }
+//   display.drawFastHLine(0, 29, 128, SSD1306_WHITE);
+//   display.setCursor(0, 31);
+//   display.print("XB RX:"); display.print(rxCount); display.print(" ECHO:"); display.println(echoCount);
+//   display.setCursor(0, 40); display.println(lastPktStr);
+//   display.display();
+// }
 
 // ════════════════════════════════════════════════════════════════════
 void setup() {
@@ -162,11 +110,11 @@ void setup() {
 #if defined(CORE_TEENSY)
   Wire.setSDA(18);  Wire.setSCL(19);
   Wire2.setSDA(24); Wire2.setSCL(25);
-  Wire3.setSDA(43); Wire3.setSCL(42);
+  // Wire3.setSDA(43); Wire3.setSCL(42);  // OLED 배선 확인 후 활성화
 #endif
   Wire.begin();   Wire.setClock(100000);
   Wire2.begin();  Wire2.setClock(50000);
-  Wire3.begin();  Wire3.setClock(400000);
+  // Wire3.begin();  Wire3.setClock(400000);
   delay(50);
 
   // ─ MOSFET 핀 초기화
@@ -176,18 +124,15 @@ void setup() {
     analogWrite(MOSFET_PINS[i], 0);
   }
 
-  // ─ OLED 초기화
-  oledOk = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  if (!oledOk) oledOk = display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
-  if (oledOk) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0);
-    display.println("HW Test v1.6");
-    display.println("Initializing...");
-    display.display();
-  }
+  // ─ OLED 초기화 — 배선 확인 후 주석 해제
+  // oledOk = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  // if (!oledOk) oledOk = display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
+  // if (oledOk) {
+  //   display.clearDisplay(); display.setTextSize(1);
+  //   display.setTextColor(SSD1306_WHITE); display.setCursor(0, 0);
+  //   display.println("HW Test v1.6"); display.println("Initializing...");
+  //   display.display();
+  // }
   Serial.println("[BOOT] HW Test v1.6 — MOSFET+MLX+XBee");
 
   // ─ 온도 센서 초기화
@@ -242,7 +187,7 @@ void loop() {
     Serial.print("  MLX2 obj=");      Serial.print(obj2, 1);
     Serial.print(" amb=");            Serial.println(amb2, 1);
 
-    if (oledOk) oledDraw(mosfetOn, obj1, obj2, amb1, amb2);
+    // if (oledOk) oledDraw(mosfetOn, obj1, obj2, amb1, amb2);
   }
 }
 
