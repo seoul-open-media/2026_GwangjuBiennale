@@ -16,7 +16,7 @@
 #define SMA_PWM_MAX      100         // (255 기준) — 테스트 출력 상향
 #define SMA_PWM_FREQ    100u         // 100 Hz — 스위칭 EMI 최소화 (초지향성 스피커 노이즈 저감)
 #define FAN_PWM_FREQ  15000u         // 15 kHz (팬은 가청 노이즈 방지 위해 고주파 유지)
-#define SMA_STAGGER_MS  20u          // 그룹 A→B 순차 점화 딜레이 (ms)
+#define SMA_STAGGER_MS   0u          // 그룹 A→B 순차 점화 딜레이 (ms, 0=동시)
 #define SMA_BALANCE_THRESH  2.0f     // 두 센서 허용 온도차 (°C) — 초과 시 앞선 그룹 OFF
 #define HEAT_BALANCE_GRACE_MS 3000UL // 가열 시작 후 균형제어 유예 시간 (ms)
 #define HEAT_MAX_TEMP      50.0f     // 절대 상한 (°C) — 어느 센서든 초과 시 즉시 가열 정지
