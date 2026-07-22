@@ -50,8 +50,7 @@ static bool tempDebugStreamOn = true;
 static unsigned long lastTempDebugMs = 0;
 static const uint32_t TEMP_DEBUG_INTERVAL_MS = 500;
 
-// ── IF 단독 테스트용 프리셋 (부팅 자동 시작은 비활성) ────────────────
-static const bool AUTO_TEST_PRESET_ON_BOOT = false;
+// ── IF 단독 테스트용 프리셋 (센서 정상 시 부팅 즉시 시작) ─────────────
 static const uint8_t AUTO_TEST_PRESET_NUM  = 4;  // 2~5 중 선택
 
 // handleSerialDebug()에서 먼저 사용하므로 전방 선언
@@ -196,12 +195,14 @@ void setup() {
 
   wdtInit();
 
-  // 제어 프로그램 없이 테스트할 때: 부팅 직후 프리셋 자동 시작
-  if (AUTO_TEST_PRESET_ON_BOOT && AUTO_TEST_PRESET_NUM >= 2 && AUTO_TEST_PRESET_NUM <= 5) {
+  // 센서 정상일 때는 부팅 직후 프리셋을 시작해 바로 가열 진입
+  if (!sensorError && AUTO_TEST_PRESET_NUM >= 2 && AUTO_TEST_PRESET_NUM <= 5) {
     cmd.mode = 2;
     cmd.presetNum = AUTO_TEST_PRESET_NUM;
     runPreset(AUTO_TEST_PRESET_NUM);
     Serial.print("[AUTO TEST] preset start: "); Serial.println(AUTO_TEST_PRESET_NUM);
+  } else if (sensorError) {
+    Serial.println("[AUTO TEST] skipped: sensorError=1");
   }
 
   Serial.println("[DBG] serial: 1=start, 0=stop, t=once, m=stream on/off, h=help");
