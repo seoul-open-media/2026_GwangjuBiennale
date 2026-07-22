@@ -5,6 +5,10 @@
       "path": "Indeterministic_Float"
     },
     {
+      "name": "IF_test",
+      "path": "IF_test"
+    },
+    {
       "name": "Golden_Petals",
       "path": "Golden_Petals"
     },
