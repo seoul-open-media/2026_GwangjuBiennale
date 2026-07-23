@@ -187,7 +187,7 @@ void readTemps(State currentState) {
 
 // ── Wire2 버스 강제 해제 ─────────────────────────────────────────────
 // MLX2 에러로 SDA 가 LOW 에 묶인 경우 bit-bang 으로 버스 해제.
-// Wire2 를 공유하는 OLED 가 정상 동작할 수 있도록 SENSOR_ERROR 진입 즉시 호출.
+// SENSOR_ERROR 진입 시 Wire2 복구용으로 호출.
 void wire2FreeBus() {
   Wire2.end();
   pinMode(25, OUTPUT); pinMode(24, INPUT_PULLUP);

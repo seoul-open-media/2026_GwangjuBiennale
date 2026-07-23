@@ -14,4 +14,4 @@ void sensorsInit();
 void readTemps(State currentState);
 void sensorsResetEma2();  // HEATING 진입 시 호출 — 이전 사이클 EMA 잔류 방지
 bool sensorsAutoRecover(); // SENSOR_ERROR 자동 복구 시도, true=성공 (INIT 계열 제외)
-void wire2FreeBus();       // Wire2 버스 강제 해제 (MLX2 에러 시 OLED WDT 방지용)
+void wire2FreeBus();       // Wire2 버스 강제 해제 (MLX2 에러 복구용)

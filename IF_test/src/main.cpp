@@ -27,7 +27,7 @@ static void wdtKick() {
 
 State         state    = IDLE;
 unsigned long stateMs  = 0;
-unsigned long lastSensor = 0;  // 센서 읽기 주기 (별도 관리로 OLED Wire2와 충돌 방지)
+unsigned long lastSensor = 0;  // 센서 읽기 주기
 unsigned long lastStatus  = 0;
 unsigned long nextStatus  = 0;  // 랜덤 지터 적용 다음 전송 시각
 uint8_t       swState    = 0;    // 현재 스위치 상태
@@ -50,11 +50,20 @@ static bool tempDebugStreamOn = true;
 static unsigned long lastTempDebugMs = 0;
 static const uint32_t TEMP_DEBUG_INTERVAL_MS = 500;
 
+// ── 진단용 강제 가열 모드 (채널 1~4 동일 조건 구동) ──────────────────
+static bool forceHeatTestOn = false;
+static unsigned long forceHeatStartMs = 0;
+static unsigned long forceHeatLastLogMs = 0;
+static const uint32_t FORCE_HEAT_MAX_MS = 120000UL;  // 안전 타임아웃 2분
+static const uint8_t  FORCE_HEAT_PWM = SMA_PWM_MAX;
+static const bool AUTO_FORCE_HEAT_ON_BOOT = true;    // true면 부팅 직후 강제가열 자동 시작
+
 // ── IF 단독 테스트용 프리셋 (센서 정상 시 부팅 즉시 시작) ─────────────
 static const uint8_t AUTO_TEST_PRESET_NUM  = 4;  // 2~5 중 선택
 
 // handleSerialDebug()에서 먼저 사용하므로 전방 선언
 void runPreset(uint8_t n);
+void enterState(State s);
 
 static void printTempDebugLine(const char* tag, unsigned long now, State st) {
   Serial.print(tag);
@@ -66,6 +75,75 @@ static void printTempDebugLine(const char* tag, unsigned long now, State st) {
   Serial.print(" amb2="); Serial.print(ambTemp2, 2);
   Serial.print(" err="); Serial.print(sensorError ? 1 : 0);
   Serial.print(" fault="); Serial.println(sensorFaultCode);
+}
+
+static void stopForceHeatTest(unsigned long now, const char* reason) {
+  forceHeatTestOn = false;
+  smaOff();
+  fanOff();
+  state = IDLE;
+  stateMs = now;
+  Serial.print("[FORCE HEAT] stop: ");
+  Serial.println(reason);
+}
+
+static void startForceHeatTest(unsigned long now) {
+  forceHeatTestOn = true;
+  forceHeatStartMs = now;
+  forceHeatLastLogMs = 0;
+  newCmd = false;  // 이전 무선 명령 무시
+  sensorError = false;  // 센서 에러 상태머신 진입 우회
+  sensorFaultCode = FAULT_NONE;
+  state = HEATING;
+  stateMs = now;
+  Serial.println("[FORCE HEAT] start: channels 1~4 same PWM");
+}
+
+static void runForceHeatTest(unsigned long now) {
+  if (fanActive) fanOff();
+
+  float tgt = (float)cmd.tempTarget;
+  bool t1ok = objTemp1 >= tgt;
+  bool t2ok = objTemp2 >= tgt;
+
+  // 강제 가열 자동 시작은 유지하되, 목표 온도 도달 시 자동 정지 후 팬 냉각으로 전환
+  if (t1ok && t2ok) {
+    forceHeatTestOn = false;
+    smaOff();
+    fanOn(255);
+    state = COOLING;
+    stateMs = now;
+    coolAmbMs = 0;
+    Serial.print("[FORCE HEAT] target reached -> COOLING, target=");
+    Serial.print(cmd.tempTarget);
+    Serial.print(" obj1="); Serial.print(objTemp1, 2);
+    Serial.print(" obj2="); Serial.println(objTemp2, 2);
+    return;
+  }
+
+  // Group A/B를 동일 PWM으로 강제 구동
+  analogWrite(SMA_A1_PIN, FORCE_HEAT_PWM);
+  analogWrite(SMA_A2_PIN, FORCE_HEAT_PWM);
+  analogWrite(SMA_B1_PIN, FORCE_HEAT_PWM);
+  analogWrite(SMA_B2_PIN, FORCE_HEAT_PWM);
+  smaActiveA = true;
+  smaActiveB = true;
+  smaActive = true;
+
+  if (now - forceHeatStartMs >= FORCE_HEAT_MAX_MS) {
+    stopForceHeatTest(now, "timeout");
+    return;
+  }
+
+  if (now - forceHeatLastLogMs >= 500) {
+    forceHeatLastLogMs = now;
+    Serial.print("[FORCE HEAT] ms="); Serial.print(now - forceHeatStartMs);
+    Serial.print(" pwm="); Serial.print((int)FORCE_HEAT_PWM);
+    Serial.print(" obj1="); Serial.print(objTemp1, 2);
+    Serial.print(" obj2="); Serial.print(objTemp2, 2);
+    Serial.print(" amb1="); Serial.print(ambTemp, 2);
+    Serial.print(" amb2="); Serial.println(ambTemp2, 2);
+  }
 }
 
 static void handleSerialDebug(unsigned long now) {
@@ -91,8 +169,12 @@ static void handleSerialDebug(unsigned long now) {
       cmd.presetNum = 1;
       newCmd = true;
       Serial.println("[SERIAL STOP]");
+    } else if (c == 'g' || c == 'G') {
+      startForceHeatTest(now);
+    } else if (c == 'x' || c == 'X') {
+      stopForceHeatTest(now, "manual");
     } else if (c == 'h' || c == 'H' || c == '?') {
-      Serial.println("[DBG] commands: 1=start, 0=stop, t=print once, m=toggle stream(500ms), h=?=help");
+      Serial.println("[DBG] commands: 1=start, 0=stop, g=force heat on, x=force heat off, t=print once, m=toggle stream(500ms), h=?=help");
     }
   }
 
@@ -195,17 +277,27 @@ void setup() {
 
   wdtInit();
 
-  // 센서 정상일 때는 부팅 직후 프리셋을 시작해 바로 가열 진입
-  if (!sensorError && AUTO_TEST_PRESET_NUM >= 2 && AUTO_TEST_PRESET_NUM <= 5) {
-    cmd.mode = 2;
-    cmd.presetNum = AUTO_TEST_PRESET_NUM;
-    runPreset(AUTO_TEST_PRESET_NUM);
-    Serial.print("[AUTO TEST] preset start: "); Serial.println(AUTO_TEST_PRESET_NUM);
-  } else if (sensorError) {
-    Serial.println("[AUTO TEST] skipped: sensorError=1");
+  // 진단 기본 모드: 부팅 직후 강제가열 자동 시작 (시리얼 명령 불필요)
+  if (AUTO_FORCE_HEAT_ON_BOOT) {
+    if (!sensorError) {
+      startForceHeatTest(millis());
+      Serial.println("[AUTO] force heat enabled on boot");
+    } else {
+      Serial.println("[AUTO] force heat skipped: sensorError=1");
+    }
+  } else {
+    // 센서 정상일 때는 부팅 직후 프리셋을 시작해 바로 가열 진입
+    if (!sensorError && AUTO_TEST_PRESET_NUM >= 2 && AUTO_TEST_PRESET_NUM <= 5) {
+      cmd.mode = 2;
+      cmd.presetNum = AUTO_TEST_PRESET_NUM;
+      runPreset(AUTO_TEST_PRESET_NUM);
+      Serial.print("[AUTO TEST] preset start: "); Serial.println(AUTO_TEST_PRESET_NUM);
+    } else if (sensorError) {
+      Serial.println("[AUTO TEST] skipped: sensorError=1");
+    }
   }
 
-  Serial.println("[DBG] serial: 1=start, 0=stop, t=once, m=stream on/off, h=help");
+  Serial.println("[DBG] serial: 1=start, 0=stop, g=force heat on, x=force heat off, t=once, m=stream on/off, h=help");
 
 }
 
@@ -217,6 +309,35 @@ void loop() {
   handleSerialDebug(now);
 
   readXBee();
+
+  if (forceHeatTestOn) {
+    // 진단 모드에서는 무선 명령/상태머신을 우회하고 동일 조건 가열만 유지
+    newCmd = false;
+
+    // 강제 가열 중에도 센서는 계속 읽어야 채널별 상승 속도 비교 가능
+    if (now - lastSensor >= 100) {
+      lastSensor = now;
+      readTemps(state);
+    }
+
+    uint8_t swCur = !digitalRead(SW_PIN);
+    if (swCur != swState) {
+      swState = swCur;
+      swMs    = now;
+      if (swCur) swEverSeen = true;
+    }
+
+    runForceHeatTest(now);
+
+    if (now >= nextStatus) {
+      nextStatus = now + 450 + random(100);
+      lastStatus = now;
+      sendStatus(state, now - stateMs, false, FAULT_NONE,
+                 objTemp1, objTemp2, swState,
+                 swEverSeen ? (now - swMs) : 0);
+    }
+    return;
+  }
 
   // 센서 100ms 주기 읽기 — MLX90614 내부 갱신 주기(~10Hz)에 맞춤
   // 더 빠르게 읽으면 레지스터 포인터가 꼬여 ambient(0x06)가 반환됨

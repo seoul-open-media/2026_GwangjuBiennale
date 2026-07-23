@@ -5,6 +5,9 @@
 // ════════════════════════════════════════════════════════════════════
 
 // ── 핀 ──────────────────────────────────────────────────────────────
+// IF_test 실제 출력 매핑:
+//   pin2/3 = Group A SMA, pin4/5 = Group B SMA, pin6 = FAN
+// (hardware_test의 6채널 테스트 매핑과는 다름)
 #define SMA_A1_PIN  2   // MOSFET1 ─┐ Group A  (MLX1)
 #define SMA_A2_PIN  3   // MOSFET2 ─┘
 #define SMA_B1_PIN  4   // MOSFET3 ─┐ Group B  (MLX2)
