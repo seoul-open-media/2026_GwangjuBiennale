@@ -270,9 +270,7 @@ void setup() {
   // sensorsInit() 이후에 덮어써야 센서 정상이어도 WDT 리셋을 보고할 수 있음
   if (SRC_SRSR & SRC_SRSR_WDOG_RST_B) {
     SRC_SRSR = SRC_SRSR_WDOG_RST_B;  // W1C: 클리어 (다음 리셋과 혼동 방지)
-    sensorFaultCode = FAULT_WDT_FREEZE;
-    sensorError     = true;
-    Serial.println("[WDT] 워치독 타임아웃 리셋 감지");
+    Serial.println("[WDT WARN] 워치독 타임아웃 리셋 이력 감지 (동작 지속)");
   }
 
   wdtInit();

@@ -32,11 +32,14 @@ static const float TEMP_MAX = 85.0f;
 static uint8_t failCount1 = 0, failCount2 = 0;
 static const uint8_t FAIL_MAX = 10;
 
-// ── 5초 동일값 감지: 100ms × 50 = 5초 연속 동일 → 센서 에러
-static const uint8_t SAME_LIMIT = 50;
+// ── 20초 동일값 감지: 100ms × 200 = 20초 연속 동일 → 센서 에러
+static const uint16_t SAME_LIMIT = 200;
 static const float   SAME_THR   = 0.015f;  // 1 LSB(0.02°C) 미만 → 1 LSB 변화도 '다름'으로 처리, 실온 안정 시 오진 방지
-static uint8_t sameCount1 = 0, sameCount2 = 0;
+static uint16_t sameCount1 = 0, sameCount2 = 0;
 static float   lastRaw1   = -999.0f, lastRaw2 = -999.0f;
+
+// ── 부팅 직후 워밍업: 센서/전원 안정화 시간 동안 실패 카운트 누적 제외
+static const uint32_t SENSOR_WARMUP_MS = 10000UL;
 
 /* ── I2C 버스 언락 (주석처리)
 static void i2cBusRecover(TwoWire &wire, uint8_t sdaPin, uint8_t sclPin) {
@@ -126,23 +129,30 @@ void readTemps(State currentState) {
   if (nowMs - lastRead < 100) return;
   lastRead = nowMs;
 
+  const bool inWarmup = (nowMs < SENSOR_WARMUP_MS);
+  const bool enableFrozenDetect = (!inWarmup && currentState != IDLE);
+
   // ── MLX1
   if (mlx1Ok) {
     float o = readObjectDirect(Wire, 0x5A);
     if (!isnan(o) && o > TEMP_MIN && o < TEMP_MAX) {
       failCount1 = 0;
-      // 5초 동일값 감지
-      if (lastRaw1 > -900.0f && fabsf(o - lastRaw1) < SAME_THR) {
-        if (++sameCount1 >= SAME_LIMIT) {
-          sensorError = true; sensorErrorId = 1; sensorFaultCode = FAULT_MLX1_FROZEN;
-          Serial.println("[MLX1 ERR] 5초 동일값 → sensor error");
-          return;
-        }
-      } else { sameCount1 = 0; }
+      if (enableFrozenDetect) {
+        // 장시간 동일값 감지 (IDLE/워밍업 구간 제외)
+        if (lastRaw1 > -900.0f && fabsf(o - lastRaw1) < SAME_THR) {
+          if (++sameCount1 >= SAME_LIMIT) {
+            sensorError = true; sensorErrorId = 1; sensorFaultCode = FAULT_MLX1_FROZEN;
+            Serial.println("[MLX1 ERR] 20초 동일값 → sensor error");
+            return;
+          }
+        } else { sameCount1 = 0; }
+      } else {
+        sameCount1 = 0;
+      }
       lastRaw1 = o;
       objTemp1 = o;
     } else {
-      if (++failCount1 >= FAIL_MAX) {
+      if (!inWarmup && ++failCount1 >= FAIL_MAX) {
         sensorError = true; sensorErrorId = 1; sensorFaultCode = FAULT_MLX1_FAIL;
         Serial.print("[MLX1 ERR] out of range val="); Serial.print(o, 2);
         Serial.println(" → sensor error");
@@ -155,18 +165,22 @@ void readTemps(State currentState) {
     float o = readObjectDirect(Wire2, 0x5A);
     if (!isnan(o) && o > TEMP_MIN && o < TEMP_MAX) {
       failCount2 = 0;
-      // 5초 동일값 감지
-      if (lastRaw2 > -900.0f && fabsf(o - lastRaw2) < SAME_THR) {
-        if (++sameCount2 >= SAME_LIMIT) {
-          sensorError = true; sensorErrorId = 2; sensorFaultCode = FAULT_MLX2_FROZEN;
-          Serial.println("[MLX2 ERR] 5초 동일값 → sensor error");
-          return;
-        }
-      } else { sameCount2 = 0; }
+      if (enableFrozenDetect) {
+        // 장시간 동일값 감지 (IDLE/워밍업 구간 제외)
+        if (lastRaw2 > -900.0f && fabsf(o - lastRaw2) < SAME_THR) {
+          if (++sameCount2 >= SAME_LIMIT) {
+            sensorError = true; sensorErrorId = 2; sensorFaultCode = FAULT_MLX2_FROZEN;
+            Serial.println("[MLX2 ERR] 20초 동일값 → sensor error");
+            return;
+          }
+        } else { sameCount2 = 0; }
+      } else {
+        sameCount2 = 0;
+      }
       lastRaw2 = o;
       objTemp2 = o;
     } else {
-      if (++failCount2 >= FAIL_MAX) {
+      if (!inWarmup && ++failCount2 >= FAIL_MAX) {
         sensorError = true; sensorErrorId = 2; sensorFaultCode = FAULT_MLX2_FAIL;
         Serial.print("[MLX2 ERR] out of range val="); Serial.print(o, 2);
         Serial.println(" → sensor error");
