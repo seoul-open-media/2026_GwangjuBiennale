@@ -38,6 +38,10 @@
     {
       "name": "hidden_sound_path",
       "path": "hidden_sound_path"
+    },
+    {
+      "name": "Bell_shaker",
+      "path": "Bell_shaker"
     }
   ],
   "settings": {
