@@ -359,7 +359,7 @@ void loop() {
                  objTemp1, objTemp2, swState,
                  swEverSeen ? (now - swMs) : 0);
     }
-    // ── 자동 복구: 10초 후 센서 재초기화 시도 (최대 5회, INIT 계열 제외) ─
+    // ── 자동 복구: 10초 후 센서 재초기화 시도 (최대 5회) ─
     static uint8_t autoRecoverCnt = 0;
     if (autoRecoverCnt < 5 && now - stateMs >= 10000UL) {
       ++autoRecoverCnt;
@@ -376,6 +376,7 @@ void loop() {
     // — 센서 오류 클리어 후 IDLE 복귀, 다음 루프에서 센서 재시도
     if (newCmd && cmd.fanSpeed == 0 && cmd.tempTarget == 0) {
       newCmd          = false;
+      sensorsInit();
       sensorError     = false;
       sensorFaultCode = FAULT_NONE;
       autoRecoverCnt  = 0;

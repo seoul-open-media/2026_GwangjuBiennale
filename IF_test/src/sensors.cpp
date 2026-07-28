@@ -79,21 +79,62 @@ static float readAmbientDirect(TwoWire &wire, uint8_t addr) {
   return readRegDirect(wire, addr, 0x06);  // MLX90614_TA
 }
 
-void sensorsInit() {
-  // MLX90614 전원 투입 후 EEPROM 읽기 대기 (~250ms)
-  delay(300);
+static void recoverI2cBus(TwoWire &wire, uint8_t sdaPin, uint8_t sclPin, uint32_t hz) {
+  wire.end();
+  pinMode(sclPin, OUTPUT);
+  pinMode(sdaPin, INPUT_PULLUP);
+  for (uint8_t i = 0; i < 9; i++) {
+    digitalWrite(sclPin, HIGH); delayMicroseconds(5);
+    digitalWrite(sclPin, LOW);  delayMicroseconds(5);
+  }
+  // STOP condition to release a stuck slave state machine.
+  pinMode(sdaPin, OUTPUT); digitalWrite(sdaPin, LOW); delayMicroseconds(5);
+  digitalWrite(sclPin, HIGH); delayMicroseconds(5);
+  digitalWrite(sdaPin, HIGH); delayMicroseconds(5);
+  wire.begin();
+  wire.setClock(hz);
+}
 
-  // MLX1 초기화 — 실패 시 최대 2회 재시도
-  for (uint8_t i = 0; i < 3 && !mlx1Ok; i++) {
-    mlx1Ok = mlx1.begin(0x5A, &Wire);
-    if (!mlx1Ok) { Serial.print("[MLX1] retry "); Serial.println(i+1); delay(100); }
+void sensorsInit() {
+  // 이전 에러 상태를 먼저 지운 뒤 재초기화 시도
+  mlx1Ok = false;
+  mlx2Ok = false;
+  sensorError = false;
+  sensorErrorId = 0;
+  sensorFaultCode = FAULT_NONE;
+
+  failCount1 = failCount2 = 0;
+  sameCount1 = sameCount2 = 0;
+  lastRaw1 = lastRaw2 = -999.0f;
+
+  // MLX90614 전원/EEPROM 안정화 대기
+  delay(500);
+
+  // 일부 개체에서 콜드부트 직후 두 버스가 동시에 초기화 실패하므로
+  // 버스 복구 + begin()을 여러 라운드로 재시도한다.
+  for (uint8_t round = 0; round < 5 && (!mlx1Ok || !mlx2Ok); round++) {
+    recoverI2cBus(Wire, 18, 19, 100000);
+    recoverI2cBus(Wire2, 24, 25, 50000);
+
+    if (!mlx1Ok) mlx1Ok = mlx1.begin(0x5A, &Wire);
+    if (!mlx2Ok) mlx2Ok = mlx2.begin(0x5A, &Wire2);
+
+    // begin() 성공 후에도 첫 읽기가 NAN이면 미안정 상태로 보고 다음 라운드 재시도.
+    if (mlx1Ok) {
+      float t1 = readObjectDirect(Wire, 0x5A);
+      if (isnan(t1)) mlx1Ok = false;
+    }
+    if (mlx2Ok) {
+      float t2 = readObjectDirect(Wire2, 0x5A);
+      if (isnan(t2)) mlx2Ok = false;
+    }
+
+    if (!mlx1Ok || !mlx2Ok) {
+      Serial.print("[MLX INIT] retry round "); Serial.println(round + 1);
+      delay(120 + round * 60);
+    }
   }
-  // MLX2 초기화 — 실패 시 최대 2회 재시도
-  Wire2.setClock(50000);
-  for (uint8_t i = 0; i < 3 && !mlx2Ok; i++) {
-    mlx2Ok = mlx2.begin(0x5A, &Wire2);
-    if (!mlx2Ok) { Serial.print("[MLX2] retry "); Serial.println(i+1); delay(100); }
-  }
+
   Serial.print("[MLX1] "); Serial.println(mlx1Ok ? "OK" : "NOT FOUND");
   Serial.print("[MLX2] "); Serial.println(mlx2Ok ? "OK" : "NOT FOUND");
 
@@ -219,48 +260,36 @@ void wire2FreeBus() {
 
 // ── SENSOR_ERROR 자동 복구 ───────────────────────────────────────────
 // 호출 조건: state == SENSOR_ERROR, 10초 경과 후 main.cpp 에서 호출
-// INIT 계열(F13/F23/F31) 은 하드웨어 문제이므로 복구 시도 안 함
+// INIT 계열(F13/F23/F31) 포함해 재초기화 시도
 // 복구 성공 시 sensorError=false, sensorFaultCode=FAULT_NONE 으로 클리어
 bool sensorsAutoRecover() {
   if (!sensorError) return true;
-  if (sensorFaultCode == FAULT_MLX1_INIT ||
-      sensorFaultCode == FAULT_MLX2_INIT ||
-      sensorFaultCode == FAULT_BOTH_INIT) {
-    return false;  // 초기화 실패는 하드웨어 문제 → 자동 복구 불가
-  }
 
-  // MLX2 계열 (F21/F22/F24)
-  if (sensorErrorId == 2) {
-    Wire2.end();
-    // bit-bang SCL 9펄스 → stuck SDA 해제
-    pinMode(25, OUTPUT); pinMode(24, INPUT_PULLUP);
-    for (uint8_t i = 0; i < 9; i++) {
-      digitalWrite(25, HIGH); delayMicroseconds(5);
-      digitalWrite(25, LOW);  delayMicroseconds(5);
-    }
-    pinMode(24, OUTPUT); digitalWrite(24, LOW); delayMicroseconds(5);
-    digitalWrite(25, HIGH); delayMicroseconds(5);
-    digitalWrite(24, HIGH); delayMicroseconds(5);
-    delay(300);
-    Wire2.begin(); Wire2.setClock(50000);
+  // MLX2 계열 (F21/F22/F23/F24/F31)
+  if (sensorErrorId == 2 || sensorErrorId == 3) {
+    recoverI2cBus(Wire2, 24, 25, 50000);
     mlx2Ok = mlx2.begin(0x5A, &Wire2);
+    if (mlx2Ok && isnan(readObjectDirect(Wire2, 0x5A))) mlx2Ok = false;
     failCount2 = 0; sameCount2 = 0; lastRaw2 = -999.0f;
     Serial.print("[AUTO-RECOVER] MLX2 재초기화 → "); Serial.println(mlx2Ok ? "OK" : "FAIL");
   }
 
-  // MLX1 계열 (F11/F12)
-  if (sensorErrorId == 1) {
-    Wire.end(); delay(100);
-    Wire.begin(); Wire.setClock(100000);
+  // MLX1 계열 (F11/F12/F13/F31)
+  if (sensorErrorId == 1 || sensorErrorId == 3) {
+    recoverI2cBus(Wire, 18, 19, 100000);
     for (uint8_t i = 0; i < 3 && !mlx1Ok; i++) {
       mlx1Ok = mlx1.begin(0x5A, &Wire);
-      if (!mlx1Ok) delay(100);
+      if (mlx1Ok && isnan(readObjectDirect(Wire, 0x5A))) mlx1Ok = false;
+      if (!mlx1Ok) delay(80);
     }
     failCount1 = 0; sameCount1 = 0; lastRaw1 = -999.0f;
     Serial.print("[AUTO-RECOVER] MLX1 재초기화 → "); Serial.println(mlx1Ok ? "OK" : "FAIL");
   }
 
-  bool ok = (sensorErrorId == 1) ? mlx1Ok : mlx2Ok;
+  bool ok;
+  if (sensorErrorId == 3)      ok = mlx1Ok && mlx2Ok;
+  else if (sensorErrorId == 1) ok = mlx1Ok;
+  else                         ok = mlx2Ok;
   if (ok) {
     sensorError     = false;
     sensorFaultCode = FAULT_NONE;
