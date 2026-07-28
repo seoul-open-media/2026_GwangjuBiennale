@@ -373,14 +373,17 @@ void loop() {
       stateMs = now;  // 실패 시 10초 타이머 재시작
     }
     // RESET 커맨드(fanSpeed=0 && tempTarget=0)는 SENSOR_ERROR에서도 처리
-    // — 센서 오류 클리어 후 IDLE 복귀, 다음 루프에서 센서 재시도
+    // — 센서 재초기화 시도 후 성공 시 IDLE 복귀
     if (newCmd && cmd.fanSpeed == 0 && cmd.tempTarget == 0) {
       newCmd          = false;
       sensorsInit();
-      sensorError     = false;
-      sensorFaultCode = FAULT_NONE;
       autoRecoverCnt  = 0;
-      enterState(IDLE);
+      if (!sensorError) {
+        enterState(IDLE);
+      } else {
+        stateMs = now;  // 실패 시 다음 자동복구 타이머 재시작
+        Serial.println("[RESET] sensorsInit failed, stay SENSOR_ERROR");
+      }
       return;
     }
     return;

@@ -119,16 +119,6 @@ void sensorsInit() {
     if (!mlx1Ok) mlx1Ok = mlx1.begin(0x5A, &Wire);
     if (!mlx2Ok) mlx2Ok = mlx2.begin(0x5A, &Wire2);
 
-    // begin() 성공 후에도 첫 읽기가 NAN이면 미안정 상태로 보고 다음 라운드 재시도.
-    if (mlx1Ok) {
-      float t1 = readObjectDirect(Wire, 0x5A);
-      if (isnan(t1)) mlx1Ok = false;
-    }
-    if (mlx2Ok) {
-      float t2 = readObjectDirect(Wire2, 0x5A);
-      if (isnan(t2)) mlx2Ok = false;
-    }
-
     if (!mlx1Ok || !mlx2Ok) {
       Serial.print("[MLX INIT] retry round "); Serial.println(round + 1);
       delay(120 + round * 60);
@@ -265,26 +255,23 @@ void wire2FreeBus() {
 bool sensorsAutoRecover() {
   if (!sensorError) return true;
 
-  // MLX2 계열 (F21/F22/F23/F24/F31)
-  if (sensorErrorId == 2 || sensorErrorId == 3) {
-    recoverI2cBus(Wire2, 24, 25, 50000);
-    mlx2Ok = mlx2.begin(0x5A, &Wire2);
-    if (mlx2Ok && isnan(readObjectDirect(Wire2, 0x5A))) mlx2Ok = false;
-    failCount2 = 0; sameCount2 = 0; lastRaw2 = -999.0f;
-    Serial.print("[AUTO-RECOVER] MLX2 재초기화 → "); Serial.println(mlx2Ok ? "OK" : "FAIL");
+  // INIT/양쪽동시 실패까지 포함해 동일한 재초기화 루틴 수행
+  for (uint8_t round = 0; round < 5 && (!mlx1Ok || !mlx2Ok); round++) {
+    if ((sensorErrorId == 2 || sensorErrorId == 3) && !mlx2Ok) {
+      recoverI2cBus(Wire2, 24, 25, 50000);
+      mlx2Ok = mlx2.begin(0x5A, &Wire2);
+    }
+    if ((sensorErrorId == 1 || sensorErrorId == 3) && !mlx1Ok) {
+      recoverI2cBus(Wire, 18, 19, 100000);
+      mlx1Ok = mlx1.begin(0x5A, &Wire);
+    }
+    if (!mlx1Ok || !mlx2Ok) delay(120 + round * 60);
   }
 
-  // MLX1 계열 (F11/F12/F13/F31)
-  if (sensorErrorId == 1 || sensorErrorId == 3) {
-    recoverI2cBus(Wire, 18, 19, 100000);
-    for (uint8_t i = 0; i < 3 && !mlx1Ok; i++) {
-      mlx1Ok = mlx1.begin(0x5A, &Wire);
-      if (mlx1Ok && isnan(readObjectDirect(Wire, 0x5A))) mlx1Ok = false;
-      if (!mlx1Ok) delay(80);
-    }
-    failCount1 = 0; sameCount1 = 0; lastRaw1 = -999.0f;
-    Serial.print("[AUTO-RECOVER] MLX1 재초기화 → "); Serial.println(mlx1Ok ? "OK" : "FAIL");
-  }
+  failCount1 = 0; sameCount1 = 0; lastRaw1 = -999.0f;
+  failCount2 = 0; sameCount2 = 0; lastRaw2 = -999.0f;
+  Serial.print("[AUTO-RECOVER] MLX1="); Serial.print(mlx1Ok ? "OK" : "FAIL");
+  Serial.print(" MLX2="); Serial.println(mlx2Ok ? "OK" : "FAIL");
 
   bool ok;
   if (sensorErrorId == 3)      ok = mlx1Ok && mlx2Ok;
