@@ -5,5 +5,8 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"platformio-ide.pythonPath": "/usr/bin/python3",
+		"platformio-ide.customPATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	}
 }

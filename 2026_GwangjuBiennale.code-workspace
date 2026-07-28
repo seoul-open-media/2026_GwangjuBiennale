@@ -45,6 +45,12 @@
     }
   ],
   "settings": {
-    "platformio-ide.projectsDir": ""
+    "platformio-ide.projectsDir": "",
+    "chat.tools.terminal.autoApprove": {
+      "/^sudo apt-get install -y git$/": {
+        "approve": true,
+        "matchCommandLine": true
+      }
+    }
   }
 }

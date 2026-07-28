@@ -5,8 +5,7 @@
 #    1. USB 시리얼 설정   (stty /dev/ttyUSB0 raw)
 #    2. 시리얼 게이트웨이  (sema_host.py)
 #    3. MQTT 브리지       (bridge.py, systemd)
-#    4. 관객 감지 데몬    (audience_detector.py, systemd)
-#    5. ngrok 터널
+#    4. ngrok 터널
 #    ※ 대시보드/제어 패널 Chrome 창은 별도 systemd 서비스로 관리
 #       (sema-dashboard.service / sema-control.service)
 #
@@ -58,12 +57,7 @@ echo "[..] sema-bridge 서비스 시작"
 systemctl --user restart sema-bridge
 echo "[OK] sema-bridge 시작  로그: tools/mqtt_monitor/bridge.log"
 
-# ── 4. 관객 감지 데몬 (systemd 서비스 — 크래시 시 자동 재시작) ────────────
-echo "[..] sema-audience 서비스 시작"
-systemctl --user restart sema-audience
-echo "[OK] sema-audience 시작  로그: tools/mqtt_monitor/audience.log"
-
-# ── 5. ngrok 터널 (외부 접속용 고정 URL) ────────────────────────
+# ── 4. ngrok 터널 (외부 접속용 고정 URL) ────────────────────────
 pkill -f ngrok 2>/dev/null; sleep 1
 ngrok http --domain=android-handclap-ditto.ngrok-free.dev 8181 \
     >> "$LOG_DIR/ngrok.log" 2>&1 &

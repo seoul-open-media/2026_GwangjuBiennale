@@ -29,10 +29,9 @@ stop_pid() {
     fi
 }
 
-# systemd 서비스 중지 (sema_host, bridge, audience)
+# systemd 서비스 중지 (sema_host, bridge)
 systemctl --user stop sema-host.service  && echo "[OK] sema-host 중지" || echo "[--] sema-host 이미 중지됨"
 systemctl --user stop sema-bridge  && echo "[OK] sema-bridge 중지" || echo "[--] sema-bridge 이미 중지됨"
-systemctl --user stop sema-audience && echo "[OK] sema-audience 중지" || echo "[--] sema-audience 이미 중지됨"
 
 # ngrok 터널 중지
 stop_pid "ngrok"
