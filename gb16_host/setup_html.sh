@@ -319,6 +319,105 @@ for fn in ('toggleMqttCfg', 'applyMqttCfg', 'clearMqttCfg'):
 # 20. 통계 모달 HTML + chart.js + 통계 JS 스크립트 블록 전체 제거
 t = re.sub(r'\n\n<!-- ── 통계 모달 ──[^\n]*\n.*?</body>', '\n</body>', t, flags=re.DOTALL)
 
+# 21. GP 파라미터 탭 버튼 제거
+t = re.sub(r'        <div class="ptab active" id="tab-gp"[^\n]+\n', '', t)
+
+# 22. params-gp 패널 제거 (주석 포함)
+t = re.sub(r'      <!-- GP 파라미터 -->.*?      <!-- IF 파라미터 -->', '      <!-- IF 파라미터 -->', t, flags=re.DOTALL)
+
+# 23. IF 탭 기본 활성화 (active 클래스 추가 + display:none 제거)
+t = t.replace('<div class="ptab" id="tab-if" onclick="switchParamTab(\'if\')">IF</div>',
+              '<div class="ptab active" id="tab-if" onclick="switchParamTab(\'if\')">IF</div>')
+t = t.replace('<div id="params-if" style="display:none">', '<div id="params-if">')
+
+# 24. paramTab 기본값 수정
+t = t.replace("let paramTab   = 'gp';", "let paramTab   = 'if';")
+
+# 25. switchParamTab 에서 params-gp / tab-gp 참조 제거
+t = re.sub(r"  document\.getElementById\('params-gp'\)\.style\.display[^\n]+\n", '', t)
+t = re.sub(r"  document\.getElementById\('tab-gp'\)\.classList[^\n]+\n", '', t)
+
+# 26. FAN_ON 버튼 GP 조건 제거
+t = t.replace(
+    "sendSelected('FAN_ON speed='+(paramTab==='gp'?gpFanVal():ifFanVal()))",
+    "sendSelected('FAN_ON speed='+ifFanVal())"
+)
+
+# 27. 전원 제어 GROUP_NAMES JS 업데이트 (1~6 → 1~4, GB16 이름)
+t = re.sub(
+    r"const GROUP_NAMES = \{[^}]+\};",
+    "const GROUP_NAMES = {\n"
+    "  1: '비결정적 유영 A',\n"
+    "  2: '비결정적 유영 B',\n"
+    "  3: 'IF Ceiling',\n"
+    "  4: '기타',\n"
+    "};",
+    t
+)
+
+# 28. 전원 제어 HTML 그리드: 6행 → 4행 (GB16 이름)
+new_pwr_grid = (
+    '      <div class="pwr-grid">\n'
+    '        <div class="pwr-row">\n'
+    '          <span class="pwr-id">1</span><span class="pwr-name">비결정적 유영 A</span>\n'
+    '          <div class="pwr-btns">\n'
+    '            <button class="pbr btn-on"  onclick="sendPower(1,\'on\')">ON</button>\n'
+    '            <button class="pbr btn-off" onclick="sendPower(1,\'off\')">OFF</button>\n'
+    '            <button class="pbr btn-rst" onclick="sendPower(1,\'reset\')">↺</button>\n'
+    '          </div>\n'
+    '        </div>\n'
+    '        <div class="pwr-row">\n'
+    '          <span class="pwr-id">2</span><span class="pwr-name">비결정적 유영 B</span>\n'
+    '          <div class="pwr-btns">\n'
+    '            <button class="pbr btn-on"  onclick="sendPower(2,\'on\')">ON</button>\n'
+    '            <button class="pbr btn-off" onclick="sendPower(2,\'off\')">OFF</button>\n'
+    '            <button class="pbr btn-rst" onclick="sendPower(2,\'reset\')">↺</button>\n'
+    '          </div>\n'
+    '        </div>\n'
+    '        <div class="pwr-row">\n'
+    '          <span class="pwr-id">3</span><span class="pwr-name">IF Ceiling</span>\n'
+    '          <div class="pwr-btns">\n'
+    '            <button class="pbr btn-on"  onclick="sendPower(3,\'on\')">ON</button>\n'
+    '            <button class="pbr btn-off" onclick="sendPower(3,\'off\')">OFF</button>\n'
+    '            <button class="pbr btn-rst" onclick="sendPower(3,\'reset\')">↺</button>\n'
+    '          </div>\n'
+    '        </div>\n'
+    '        <div class="pwr-row">\n'
+    '          <span class="pwr-id">4</span><span class="pwr-name">기타</span>\n'
+    '          <div class="pwr-btns">\n'
+    '            <button class="pbr btn-on"  onclick="sendPower(4,\'on\')">ON</button>\n'
+    '            <button class="pbr btn-off" onclick="sendPower(4,\'off\')">OFF</button>\n'
+    '            <button class="pbr btn-rst" onclick="sendPower(4,\'reset\')">↺</button>\n'
+    '          </div>\n'
+    '        </div>\n'
+)
+t = re.sub(
+    r'      <div class="pwr-grid">.*?      </div>\n      <div id="pwr-log">',
+    new_pwr_grid + '      <div id="pwr-log">',
+    t, flags=re.DOTALL
+)
+
+# 29. 매뉴얼 섹션 전원 그룹 이름 업데이트 (6행 → 4행)
+t = re.sub(
+    r'        <div class="man-row"><span class="man-key info">1</span><span class="man-val">황금칩 꽃</span></div>\n'
+    r'        <div class="man-row"><span class="man-key info">2</span><span class="man-val">황금빛 꽃잎 1</span></div>\n'
+    r'        <div class="man-row"><span class="man-key info">3</span><span class="man-val">황금빛 꽃잎 2</span></div>\n'
+    r'        <div class="man-row"><span class="man-key info">4</span><span class="man-val">비결정적 유영</span></div>\n'
+    r'        <div class="man-row"><span class="man-key info">5</span><span class="man-val">아해들</span></div>\n'
+    r'        <div class="man-row"><span class="man-key info">6</span><span class="man-val">황금빛 꽃 조명</span></div>',
+    '        <div class="man-row"><span class="man-key info">1</span><span class="man-val">비결정적 유영 A</span></div>\n'
+    '        <div class="man-row"><span class="man-key info">2</span><span class="man-val">비결정적 유영 B</span></div>\n'
+    '        <div class="man-row"><span class="man-key info">3</span><span class="man-val">IF Ceiling</span></div>\n'
+    '        <div class="man-row"><span class="man-key info">4</span><span class="man-val">기타</span></div>',
+    t
+)
+
+# 30. auto-target 드롭다운 "IF만 (13-18)" 제거
+t = t.replace(
+    '          <option value="IF">IF만 (13-18)</option>\n',
+    ''
+)
+
 # 9. 스태거드 버튼 + JS 추가
 stagger_js = (
     '\nfunction staggerStart() {\n'

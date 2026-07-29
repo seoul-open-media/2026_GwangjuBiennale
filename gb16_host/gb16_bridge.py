@@ -716,7 +716,7 @@ def handle_telegram_command(text: str, mqtt_client):
             telegram_send("⚠️ 사용법: /power <1~5>")
             return
         if gid not in TAPO_GROUP_NAMES:
-            telegram_send(f"⚠️ 그룹 번호는 1~5 (받은 값: {gid})")
+            telegram_send(f"⚠️ 그룹 번호는 1~4 (받은 값: {gid})")
             return
         name = TAPO_GROUP_NAMES[gid]
         telegram_send(f"🔌 {name} 전원 리셋 시작...")

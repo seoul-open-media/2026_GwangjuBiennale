@@ -1157,12 +1157,10 @@ body {
       <div class="man-section">
         <h3>⚡ 전원 제어 (스마트 플러그)</h3>
         <div class="man-note" style="margin-bottom:7px;">[전원 제어] 섹션에서 그룹별 ON · OFF · ↺ 재시작</div>
-        <div class="man-row"><span class="man-key info">1</span><span class="man-val">황금칩 꽃</span></div>
-        <div class="man-row"><span class="man-key info">2</span><span class="man-val">황금빛 꽃잎 1</span></div>
-        <div class="man-row"><span class="man-key info">3</span><span class="man-val">황금빛 꽃잎 2</span></div>
-        <div class="man-row"><span class="man-key info">4</span><span class="man-val">비결정적 유영</span></div>
-        <div class="man-row"><span class="man-key info">5</span><span class="man-val">아해들</span></div>
-        <div class="man-row"><span class="man-key info">6</span><span class="man-val">황금빛 꽃 조명</span></div>
+        <div class="man-row"><span class="man-key info">1</span><span class="man-val">비결정적 유영 A</span></div>
+        <div class="man-row"><span class="man-key info">2</span><span class="man-val">비결정적 유영 B</span></div>
+        <div class="man-row"><span class="man-key info">3</span><span class="man-val">IF Ceiling</span></div>
+        <div class="man-row"><span class="man-key info">4</span><span class="man-val">기타</span></div>
       </div>
 
       <!-- 사운드 -->
@@ -1228,7 +1226,6 @@ body {
         <label>대상</label>
         <select id="auto-target">
           <option value="ALL" selected>전체 (IF)</option>
-          <option value="IF">IF만 (13-18)</option>
         </select>
       </div>
       <div class="mode-select-row">
@@ -1280,38 +1277,11 @@ body {
       <h3>파라미터</h3>
 
       <div class="param-tabs">
-        <div class="ptab active" id="tab-gp" onclick="switchParamTab('gp')">GP (Unit1·2)</div>
-        <div class="ptab" id="tab-if" onclick="switchParamTab('if')">IF</div>
-      </div>
-
-      <!-- GP 파라미터 -->
-      <div id="params-gp">
-        <div class="param-row">
-          <label>온도 목표</label>
-          <input type="range" id="gp-temp" min="20" max="60" value="38"
-            oninput="document.getElementById('gp-temp-v').textContent=this.value+'°C'">
-          <span class="param-val" id="gp-temp-v">38°C</span>
-        </div>
-        <div class="param-row">
-          <label>유지 시간</label>
-          <input type="range" id="gp-sust" min="0" max="60" value="5"
-            oninput="document.getElementById('gp-sust-v').textContent=this.value+'s'">
-          <span class="param-val" id="gp-sust-v">5s</span>
-        </div>
-        <div class="param-row">
-          <label>팬 속도</label>
-          <input type="range" id="gp-fan" min="0" max="255" value="200"
-            oninput="document.getElementById('gp-fan-v').textContent=this.value">
-          <span class="param-val" id="gp-fan-v">200</span>
-        </div>
-        <div class="check-row">
-          <input type="checkbox" id="gp-loop">
-          <label for="gp-loop">루프 반복</label>
-        </div>
+        <div class="ptab active" id="tab-if" onclick="switchParamTab('if')">IF</div>
       </div>
 
       <!-- IF 파라미터 -->
-      <div id="params-if" style="display:none">
+      <div id="params-if">
         <div class="param-row">
           <label>온도 목표</label>
           <input type="range" id="if-temp" min="20" max="60" value="40"
@@ -1350,7 +1320,7 @@ body {
         <button class="cbtn heat"   onclick="sendSelected('HEAT_ON')">🔥 HEAT_ON</button>
         <button class="cbtn cool"   onclick="sendSelected('HEAT_OFF')">❄ HEAT_OFF</button>
         <button class="cbtn danger" onclick="sendSelectedConfirm('RESET')">⛔ RESET</button>
-        <button class="cbtn cool"   onclick="sendSelected('FAN_ON speed='+(paramTab==='gp'?gpFanVal():ifFanVal()))">💨 FAN_ON</button>
+        <button class="cbtn cool"   onclick="sendSelected('FAN_ON speed='+ifFanVal())">💨 FAN_ON</button>
         <button class="cbtn"        onclick="sendSelected('FAN_OFF')">🚫 FAN_OFF</button>
         <button class="cbtn send"   onclick="sendSet()">📋 SET 전송</button>
         <button class="cbtn" style="background:#7b4fc8;color:#fff" onclick="staggerStart()">🎲 스태거드 시작</button>
@@ -1399,7 +1369,7 @@ body {
       <h3>⚡ 전원 제어</h3>
       <div class="pwr-grid">
         <div class="pwr-row">
-          <span class="pwr-id">1</span><span class="pwr-name">황금칩 꽃</span>
+          <span class="pwr-id">1</span><span class="pwr-name">비결정적 유영 A</span>
           <div class="pwr-btns">
             <button class="pbr btn-on"  onclick="sendPower(1,'on')">ON</button>
             <button class="pbr btn-off" onclick="sendPower(1,'off')">OFF</button>
@@ -1407,7 +1377,7 @@ body {
           </div>
         </div>
         <div class="pwr-row">
-          <span class="pwr-id">2</span><span class="pwr-name">황금빛 꽃잎 1</span>
+          <span class="pwr-id">2</span><span class="pwr-name">비결정적 유영 B</span>
           <div class="pwr-btns">
             <button class="pbr btn-on"  onclick="sendPower(2,'on')">ON</button>
             <button class="pbr btn-off" onclick="sendPower(2,'off')">OFF</button>
@@ -1415,7 +1385,7 @@ body {
           </div>
         </div>
         <div class="pwr-row">
-          <span class="pwr-id">3</span><span class="pwr-name">황금빛 꽃잎 2</span>
+          <span class="pwr-id">3</span><span class="pwr-name">IF Ceiling</span>
           <div class="pwr-btns">
             <button class="pbr btn-on"  onclick="sendPower(3,'on')">ON</button>
             <button class="pbr btn-off" onclick="sendPower(3,'off')">OFF</button>
@@ -1423,30 +1393,13 @@ body {
           </div>
         </div>
         <div class="pwr-row">
-          <span class="pwr-id">4</span><span class="pwr-name">비결정적 유영</span>
+          <span class="pwr-id">4</span><span class="pwr-name">기타</span>
           <div class="pwr-btns">
             <button class="pbr btn-on"  onclick="sendPower(4,'on')">ON</button>
             <button class="pbr btn-off" onclick="sendPower(4,'off')">OFF</button>
             <button class="pbr btn-rst" onclick="sendPower(4,'reset')">↺</button>
           </div>
         </div>
-        <div class="pwr-row">
-          <span class="pwr-id">5</span><span class="pwr-name">아해들</span>
-          <div class="pwr-btns">
-            <button class="pbr btn-on"  onclick="sendPower(5,'on')">ON</button>
-            <button class="pbr btn-off" onclick="sendPower(5,'off')">OFF</button>
-            <button class="pbr btn-rst" onclick="sendPower(5,'reset')">↺</button>
-          </div>
-        </div>
-        <div class="pwr-row">
-          <span class="pwr-id">6</span><span class="pwr-name">황금빛 꽃 조명</span>
-          <div class="pwr-btns">
-            <button class="pbr btn-on"  onclick="sendPower(6,'on')">ON</button>
-            <button class="pbr btn-off" onclick="sendPower(6,'off')">OFF</button>
-            <button class="pbr btn-rst" onclick="sendPower(6,'reset')">↺</button>
-          </div>
-        </div>
-      </div>
       <div id="pwr-log"></div>
     </div>
 
@@ -1940,16 +1893,14 @@ ALL_IDS.forEach(id => {
 const selected = new Set();
 let mqttClient = null;
 let usingAlt   = false;
-let paramTab   = 'gp';
+let paramTab   = 'if';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  파라미터 탭 전환
 // ═══════════════════════════════════════════════════════════════════════════
 function switchParamTab(tab) {
   paramTab = tab;
-  document.getElementById('params-gp').style.display = tab === 'gp' ? '' : 'none';
   document.getElementById('params-if').style.display = tab === 'if' ? '' : 'none';
-  document.getElementById('tab-gp').classList.toggle('active', tab === 'gp');
   document.getElementById('tab-if').classList.toggle('active', tab === 'if');
   // 파라미터 탭과 auto-target 동기화 (selected 없을 때 타깃 그룹을 맞춤)
   const tgt = document.getElementById('auto-target');
@@ -2659,12 +2610,10 @@ function initSchedule() {
 
 // ── 전원 제어 (Tapo) ────────────────────────────────────────────────────────
 const GROUP_NAMES = {
-  1: '황금칩 꽃',
-  2: '황금빛 꽃잎 1',
-  3: '황금빛 꽃잎 2',
-  4: '비결정적 유영',
-  5: '아해들',
-  6: '황금빛 꽃 조명',
+  1: '비결정적 유영 A',
+  2: '비결정적 유영 B',
+  3: 'IF Ceiling',
+  4: '기타',
 };
 
 function sendPower(groupId, action) {

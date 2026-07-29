@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════
 //  main.cpp  —  setup / loop
 //  3-Axis Tension Equilibrium for Indeterministic Floating
-//  Teensy 4.x  |  robot_id: 13~18
+//  Teensy 4.x  |  robot_id: 31~34  (★ config.h 의 MY_ROBOT_ID 참조)
 // ════════════════════════════════════════════════════════════════════
 #include <Arduino.h>
 #include <Wire.h>
