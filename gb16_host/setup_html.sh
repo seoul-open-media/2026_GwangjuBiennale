@@ -390,6 +390,7 @@ new_pwr_grid = (
     '            <button class="pbr btn-rst" onclick="sendPower(4,\'reset\')">↺</button>\n'
     '          </div>\n'
     '        </div>\n'
+    '      </div>\n'  # </div> for pwr-grid
 )
 t = re.sub(
     r'      <div class="pwr-grid">.*?      </div>\n      <div id="pwr-log">',
@@ -444,6 +445,133 @@ stagger_btns = (
 t = t.replace(
     '<button class="cbtn send"   onclick="sendSet()">📋 SET 전송</button>',
     '<button class="cbtn send"   onclick="sendSet()">📋 SET 전송</button>\n' + stagger_btns
+)
+
+# 31. IF Ceiling 파라미터 탭 추가
+t = t.replace(
+    '<div class="ptab active" id="tab-if" onclick="switchParamTab(\'if\')">IF</div>\n      </div>',
+    '<div class="ptab active" id="tab-if"   onclick="switchParamTab(\'if\')">IF</div>\n'
+    '        <div class="ptab"        id="tab-ceil" onclick="switchParamTab(\'ceil\')">IF Ceiling</div>\n'
+    '      </div>'
+)
+
+# 32. params-ceil 슬라이더 블록 삽입 (params-if 닫힌 직후)
+ceil_params = (
+    '\n      <!-- IF Ceiling 파라미터 -->\n'
+    '      <div id="params-ceil" style="display:none">\n'
+    '        <div class="param-row">\n'
+    '          <label>온도 목표</label>\n'
+    '          <input type="range" id="ceil-temp" min="20" max="60" value="40"\n'
+    '            oninput="document.getElementById(\'ceil-temp-v\').textContent=this.value+\'°C\'">\n'
+    '          <span class="param-val" id="ceil-temp-v">40°C</span>\n'
+    '        </div>\n'
+    '        <div class="param-row">\n'
+    '          <label>유지 시간</label>\n'
+    '          <input type="range" id="ceil-sust" min="0" max="60" value="5"\n'
+    '            oninput="document.getElementById(\'ceil-sust-v\').textContent=this.value+\'s\'">\n'
+    '          <span class="param-val" id="ceil-sust-v">5s</span>\n'
+    '        </div>\n'
+    '        <div class="param-row">\n'
+    '          <label>팬 속도</label>\n'
+    '          <input type="range" id="ceil-fan" min="0" max="255" value="150"\n'
+    '            oninput="document.getElementById(\'ceil-fan-v\').textContent=this.value">\n'
+    '          <span class="param-val" id="ceil-fan-v">150</span>\n'
+    '        </div>\n'
+    '        <div class="param-row">\n'
+    '          <label>최저 온도</label>\n'
+    '          <input type="range" id="ceil-tmin" min="0" max="30" value="0"\n'
+    '            oninput="document.getElementById(\'ceil-tmin-v\').textContent=this.value===0?\'amb\':this.value+\'°C\'">\n'
+    '          <span class="param-val" id="ceil-tmin-v">amb</span>\n'
+    '        </div>\n'
+    '        <div class="check-row">\n'
+    '          <input type="checkbox" id="ceil-loop">\n'
+    '          <label for="ceil-loop">루프 반복</label>\n'
+    '        </div>\n'
+    '      </div>'
+)
+t = t.replace(
+    '        <div class="check-row">\n'
+    '          <input type="checkbox" id="if-loop">\n'
+    '          <label for="if-loop">루프 반복</label>\n'
+    '        </div>\n'
+    '      </div>\n'
+    '    </div>\n'
+    '\n'
+    '    <!-- 명령 -->',
+    '        <div class="check-row">\n'
+    '          <input type="checkbox" id="if-loop">\n'
+    '          <label for="if-loop">루프 반복</label>\n'
+    '        </div>\n'
+    '      </div>'
+    + ceil_params +
+    '\n    </div>\n'
+    '\n'
+    '    <!-- 명령 -->'
+)
+
+# 33. switchParamTab → params-ceil / tab-ceil 처리 추가
+t = re.sub(
+    r'function switchParamTab\(tab\) \{.*?'
+    r'if \(tgt\) tgt\.value = tab === .gp. \? .GP. : .IF.;\n\}',
+    'function switchParamTab(tab) {\n'
+    '  paramTab = tab;\n'
+    "  document.getElementById('params-if').style.display   = tab === 'if'   ? '' : 'none';\n"
+    "  document.getElementById('params-ceil').style.display = tab === 'ceil' ? '' : 'none';\n"
+    "  document.getElementById('tab-if').classList.toggle('active',   tab === 'if');\n"
+    "  document.getElementById('tab-ceil').classList.toggle('active', tab === 'ceil');\n"
+    '}',
+    t, flags=re.DOTALL
+)
+
+# 34. activeFanVal() 추가 + FAN_ON 버튼 교체
+t = t.replace(
+    "function ifFanVal()  { return document.getElementById('if-fan').value; }",
+    "function ifFanVal()    { return document.getElementById('if-fan').value; }\n"
+    "function ceilFanVal()  { return document.getElementById('ceil-fan').value; }\n"
+    "function activeFanVal(){ return paramTab === 'ceil' ? ceilFanVal() : ifFanVal(); }"
+)
+t = t.replace(
+    "sendSelected('FAN_ON speed='+(paramTab==='gp'?gpFanVal():ifFanVal()))",
+    "sendSelected('FAN_ON speed='+activeFanVal())"
+)
+t = t.replace(
+    "sendSelected('FAN_ON speed='+ifFanVal())",
+    "sendSelected('FAN_ON speed='+activeFanVal())"
+)
+
+# 35. sendSet() → IF(1-30) / IF Ceiling(31-34) 분리
+t = re.sub(
+    r'function sendSet\(\) \{.*?logCmd\(lines\.join\(.\\n.\)\);\n\}',
+    'function sendSet() {\n'
+    '  const targets = resolveTargets();\n'
+    "  if (targets.length === 0) { logCmd('⚠ 대상 없음'); return; }\n"
+    '  const ifTargets   = targets.filter(id => !IF_CEIL.includes(id));  // R01~R30\n'
+    '  const ceilTargets = targets.filter(id =>  IF_CEIL.includes(id));  // R31~R34\n'
+    '  let lines = [];\n'
+    '\n'
+    '  if (ifTargets.length) {\n'
+    "    const t  = document.getElementById('if-temp').value;\n"
+    "    const s  = document.getElementById('if-sust').value;\n"
+    "    const f  = document.getElementById('if-fan').value;\n"
+    "    const tm = document.getElementById('if-tmin').value;\n"
+    "    const lp = document.getElementById('if-loop').checked ? 1 : 0;\n"
+    '    const cmd = `SET temp=${t} sust=${s} fan=${f} tmin=${tm} loop=${lp}`;\n'
+    '    ifTargets.forEach(rid => publish(rid, cmd));\n'
+    "    lines.push(`✅ IF R[${ifTargets.join(',')}] → ${cmd}`);\n"
+    '  }\n'
+    '  if (ceilTargets.length) {\n'
+    "    const t  = document.getElementById('ceil-temp').value;\n"
+    "    const s  = document.getElementById('ceil-sust').value;\n"
+    "    const f  = document.getElementById('ceil-fan').value;\n"
+    "    const tm = document.getElementById('ceil-tmin').value;\n"
+    "    const lp = document.getElementById('ceil-loop').checked ? 1 : 0;\n"
+    '    const cmd = `SET temp=${t} sust=${s} fan=${f} tmin=${tm} loop=${lp}`;\n'
+    '    ceilTargets.forEach(rid => publish(rid, cmd));\n'
+    "    lines.push(`✅ IF Ceiling R[${ceilTargets.join(',')}] → ${cmd}`);\n"
+    '  }\n'
+    "  logCmd(lines.join('\\n'));\n"
+    '}',
+    t, flags=re.DOTALL
 )
 
 f.write_text(t, encoding='utf-8')

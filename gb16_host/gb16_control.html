@@ -1277,7 +1277,8 @@ body {
       <h3>파라미터</h3>
 
       <div class="param-tabs">
-        <div class="ptab active" id="tab-if" onclick="switchParamTab('if')">IF</div>
+        <div class="ptab active" id="tab-if"   onclick="switchParamTab('if')">IF</div>
+        <div class="ptab"        id="tab-ceil" onclick="switchParamTab('ceil')">IF Ceiling</div>
       </div>
 
       <!-- IF 파라미터 -->
@@ -1311,6 +1312,38 @@ body {
           <label for="if-loop">루프 반복</label>
         </div>
       </div>
+
+      <!-- IF Ceiling 파라미터 -->
+      <div id="params-ceil" style="display:none">
+        <div class="param-row">
+          <label>온도 목표</label>
+          <input type="range" id="ceil-temp" min="20" max="60" value="40"
+            oninput="document.getElementById('ceil-temp-v').textContent=this.value+'°C'">
+          <span class="param-val" id="ceil-temp-v">40°C</span>
+        </div>
+        <div class="param-row">
+          <label>유지 시간</label>
+          <input type="range" id="ceil-sust" min="0" max="60" value="5"
+            oninput="document.getElementById('ceil-sust-v').textContent=this.value+'s'">
+          <span class="param-val" id="ceil-sust-v">5s</span>
+        </div>
+        <div class="param-row">
+          <label>팬 속도</label>
+          <input type="range" id="ceil-fan" min="0" max="255" value="150"
+            oninput="document.getElementById('ceil-fan-v').textContent=this.value">
+          <span class="param-val" id="ceil-fan-v">150</span>
+        </div>
+        <div class="param-row">
+          <label>최저 온도</label>
+          <input type="range" id="ceil-tmin" min="0" max="30" value="0"
+            oninput="document.getElementById('ceil-tmin-v').textContent=this.value===0?'amb':this.value+'°C'">
+          <span class="param-val" id="ceil-tmin-v">amb</span>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="ceil-loop">
+          <label for="ceil-loop">루프 반복</label>
+        </div>
+      </div>
     </div>
 
     <!-- 명령 -->
@@ -1320,7 +1353,7 @@ body {
         <button class="cbtn heat"   onclick="sendSelected('HEAT_ON')">🔥 HEAT_ON</button>
         <button class="cbtn cool"   onclick="sendSelected('HEAT_OFF')">❄ HEAT_OFF</button>
         <button class="cbtn danger" onclick="sendSelectedConfirm('RESET')">⛔ RESET</button>
-        <button class="cbtn cool"   onclick="sendSelected('FAN_ON speed='+ifFanVal())">💨 FAN_ON</button>
+        <button class="cbtn cool"   onclick="sendSelected('FAN_ON speed='+activeFanVal())">💨 FAN_ON</button>
         <button class="cbtn"        onclick="sendSelected('FAN_OFF')">🚫 FAN_OFF</button>
         <button class="cbtn send"   onclick="sendSet()">📋 SET 전송</button>
         <button class="cbtn" style="background:#7b4fc8;color:#fff" onclick="staggerStart()">🎲 스태거드 시작</button>
@@ -1400,6 +1433,7 @@ body {
             <button class="pbr btn-rst" onclick="sendPower(4,'reset')">↺</button>
           </div>
         </div>
+      </div>
       <div id="pwr-log"></div>
     </div>
 
@@ -1900,15 +1934,16 @@ let paramTab   = 'if';
 // ═══════════════════════════════════════════════════════════════════════════
 function switchParamTab(tab) {
   paramTab = tab;
-  document.getElementById('params-if').style.display = tab === 'if' ? '' : 'none';
-  document.getElementById('tab-if').classList.toggle('active', tab === 'if');
-  // 파라미터 탭과 auto-target 동기화 (selected 없을 때 타깃 그룹을 맞춤)
-  const tgt = document.getElementById('auto-target');
-  if (tgt) tgt.value = tab === 'gp' ? 'GP' : 'IF';
+  document.getElementById('params-if').style.display   = tab === 'if'   ? '' : 'none';
+  document.getElementById('params-ceil').style.display = tab === 'ceil' ? '' : 'none';
+  document.getElementById('tab-if').classList.toggle('active',   tab === 'if');
+  document.getElementById('tab-ceil').classList.toggle('active', tab === 'ceil');
 }
 
-function gpFanVal()  { return document.getElementById('gp-fan').value; }
-function ifFanVal()  { return document.getElementById('if-fan').value; }
+function gpFanVal()    { return document.getElementById('gp-fan').value; }
+function ifFanVal()    { return document.getElementById('if-fan').value; }
+function ceilFanVal()  { return document.getElementById('ceil-fan').value; }
+function activeFanVal(){ return paramTab === 'ceil' ? ceilFanVal() : ifFanVal(); }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  그룹 선택
@@ -1985,28 +2020,29 @@ function sendSelectedConfirm(cmd) {
 function sendSet() {
   const targets = resolveTargets();
   if (targets.length === 0) { logCmd('⚠ 대상 없음'); return; }
-  const gpTargets = targets.filter(id => GP_IDS.includes(id));
-  const ifTargets = targets.filter(id => IF_IDS.includes(id));
+  const ifTargets   = targets.filter(id => !IF_CEIL.includes(id));  // R01~R30
+  const ceilTargets = targets.filter(id =>  IF_CEIL.includes(id));  // R31~R34
   let lines = [];
 
-  if (gpTargets.length) {
-    const t   = document.getElementById('gp-temp').value;
-    const s   = document.getElementById('gp-sust').value;
-    const f   = document.getElementById('gp-fan').value;
-    const lp  = document.getElementById('gp-loop').checked ? 1 : 0;
-    const cmd = `SET temp1=${t} sust1=${s} fan1=${f} temp2=${t} sust2=${s} fan2=${f} loop=${lp}`;
-    gpTargets.forEach(rid => publish(rid, cmd));
-    lines.push(`✅ GP R[${gpTargets.join(',')}] → ${cmd}`);
-  }
   if (ifTargets.length) {
-    const t   = document.getElementById('if-temp').value;
-    const s   = document.getElementById('if-sust').value;
-    const f   = document.getElementById('if-fan').value;
-    const tm  = document.getElementById('if-tmin').value;
-    const lp  = document.getElementById('if-loop').checked ? 1 : 0;
+    const t  = document.getElementById('if-temp').value;
+    const s  = document.getElementById('if-sust').value;
+    const f  = document.getElementById('if-fan').value;
+    const tm = document.getElementById('if-tmin').value;
+    const lp = document.getElementById('if-loop').checked ? 1 : 0;
     const cmd = `SET temp=${t} sust=${s} fan=${f} tmin=${tm} loop=${lp}`;
     ifTargets.forEach(rid => publish(rid, cmd));
     lines.push(`✅ IF R[${ifTargets.join(',')}] → ${cmd}`);
+  }
+  if (ceilTargets.length) {
+    const t  = document.getElementById('ceil-temp').value;
+    const s  = document.getElementById('ceil-sust').value;
+    const f  = document.getElementById('ceil-fan').value;
+    const tm = document.getElementById('ceil-tmin').value;
+    const lp = document.getElementById('ceil-loop').checked ? 1 : 0;
+    const cmd = `SET temp=${t} sust=${s} fan=${f} tmin=${tm} loop=${lp}`;
+    ceilTargets.forEach(rid => publish(rid, cmd));
+    lines.push(`✅ IF Ceiling R[${ceilTargets.join(',')}] → ${cmd}`);
   }
   logCmd(lines.join('\n'));
 }
