@@ -37,10 +37,10 @@ static const uint8_t SOL_PINS[6] = { 2, 3, 4, 5, 6, 7 };
 #define SERVO_FREQ     50        // Hz
 
 // ── 타이밍 파라미터 ──────────────────────────────────────────────────
-#define SERVO_HOME     2500      // µs — 기본 대기 위치
-#define SERVO_RAISED   1750      // µs — 도미노 일으켜 세운 위치
+#define SERVO_HOME     2650      // µs — 기본 대기 위치
+#define SERVO_RAISED   1950      // µs — 도미노 일으켜 세운 위치
 #define SOL_PULSE_MS    200      // 솔레노이드 펄스 시간 (ms)
-#define WAIT_MS        3000      // 솔레노이드 OFF 후 서보 동작까지 대기 (ms)
+#define WAIT_MS        5000      // 솔레노이드 OFF 후 서보 동작까지 대기 (ms)
 #define SWEEP_UP_MS    1000      // 서보 2500→1750 sweep 시간 (ms)
 #define HOLD_MS         500      // 도미노 세운 후 유지 시간 (ms)
 #define SWEEP_DN_MS    1000      // 서보 1750→2500 복귀 시간 (ms)
@@ -66,6 +66,12 @@ static Adafruit_PWMServoDriver pwm(PCA9685_ADDR);
 // ── 서보 쓰기 ────────────────────────────────────────────────────────
 inline void servoWrite(uint8_t ch, uint16_t us) {
   pwm.writeMicroseconds(ch, us);
+}
+
+inline void servoWritePair(uint8_t dominoIdx, uint16_t us) {
+  uint8_t ch0 = dominoIdx * 2;
+  servoWrite(ch0, us);
+  servoWrite(ch0 + 1, us);
 }
 
 // ── 도미노 트리거 ─────────────────────────────────────────────────────
@@ -107,9 +113,9 @@ void updateDomino(uint8_t i) {
     case RAISING: {
       float    t  = constrain((float)elapsed / SWEEP_UP_MS, 0.0f, 1.0f);
       uint16_t us = (uint16_t)(SERVO_HOME + t * (int)(SERVO_RAISED - SERVO_HOME));
-      servoWrite(i, us);
+      servoWritePair(i, us);
       if (elapsed >= SWEEP_UP_MS) {
-        servoWrite(i, SERVO_RAISED);
+        servoWritePair(i, SERVO_RAISED);
         Serial.printf("[INFO] domino %d: holding at raised (%d µs)\n", i + 1, SERVO_RAISED);
         d.state = HOLDING; d.stateStart = millis();
       }
@@ -126,9 +132,9 @@ void updateDomino(uint8_t i) {
     case RETURNING: {
       float    t  = constrain((float)elapsed / SWEEP_DN_MS, 0.0f, 1.0f);
       uint16_t us = (uint16_t)(SERVO_RAISED + t * (int)(SERVO_HOME - SERVO_RAISED));
-      servoWrite(i, us);
+      servoWritePair(i, us);
       if (elapsed >= SWEEP_DN_MS) {
-        servoWrite(i, SERVO_HOME);
+        servoWritePair(i, SERVO_HOME);
         Serial.printf("[INFO] domino %d: home → IDLE\n", i + 1);
         d.state = IDLE;
       }
@@ -156,8 +162,8 @@ void setup() {
   pwm.setPWMFreq(SERVO_FREQ);
   delay(10);
 
-  // 모든 서보 홈 위치로
-  for (int i = 0; i < 6; i++) servoWrite(i, SERVO_HOME);
+  // 모든 서보 채널(0~11) 홈 위치로
+  for (int i = 0; i < 6; i++) servoWritePair(i, SERVO_HOME);
 
   Serial.println("[READY] '1'~'6' : 해당 도미노 트리거");
   Serial.println("        'a'     : 전체 동시 트리거");
@@ -178,7 +184,7 @@ void loop() {
       for (int i = 0; i < 6; i++) {
         dominos[i].state = IDLE;
         digitalWrite(SOL_PINS[i], LOW);
-        servoWrite(i, SERVO_HOME);
+        servoWritePair(i, SERVO_HOME);
       }
     }
   }

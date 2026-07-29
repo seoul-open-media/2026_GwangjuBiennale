@@ -10,3 +10,5 @@ gb16_host/.env
 gb16_host/logs/
 gb16_host/*.db
 gb16_host/gb16_bridge.log
+Golden_Petals/
+audio_shield/
