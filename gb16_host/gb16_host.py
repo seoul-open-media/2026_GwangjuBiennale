@@ -67,7 +67,6 @@ CMD_LEN    = 16   # CMD    패킷 크기
 START_B    = 0xFF
 END_B      = 0xFE
 
-GP_IDS  = set()                     # Golden_Petals 미사용
 IF_IDS  = set(range(1,  31))        # Indeterministic_Float  1~30
 IF_CEILING_IDS = set(range(31, 35)) # IF Ceiling             31~34
 ALL_IDS = IF_IDS | IF_CEILING_IDS
@@ -166,32 +165,6 @@ def if_p(rid: int) -> IfParams:
 # ══════════════════════════════════════════════════════════════════════════════
 def _clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, int(v)))
-
-def build_gp_cmd(rid: int, p: GpParams) -> bytes:
-    """Golden_Petals CMD 패킷 (16 bytes)
-    b0=START  b1=rid  b2=mode  b3=temp1  b4=sust1  b5=fan1  b6=fanOnly1
-    b7=temp2  b8=sust2  b9=fan2  b10=fanOnly2  b11=volume  b12=loop  b13=preset
-    b14=sound  b15=END
-    """
-    return bytes([
-        START_B,
-        rid & 0xFF,
-        _clamp(p.mode,     1, 2),
-        _clamp(p.temp1,    0, 60),
-        _clamp(p.sust1,    0, 60),
-        _clamp(p.fan1,     0, 255),
-        p.fanOnly1 & 1,
-        _clamp(p.temp2,    0, 60),
-        _clamp(p.sust2,    0, 60),
-        _clamp(p.fan2,     0, 255),
-        p.fanOnly2 & 1,
-        _clamp(p.volume,   0, 100),
-        p.loop   & 1,
-        _clamp(p.preset,   0, 7),
-        _clamp(p.sound,    0, 4),
-        END_B,
-    ])
-
 
 def build_if_cmd(rid: int, p: IfParams) -> bytes:
     """Indeterministic_Float CMD 패킷 (16 bytes)
@@ -345,29 +318,6 @@ def parse_and_enqueue(raw: str, send_queue: queue.Queue) -> None:
         if pkt is not None:
             send_queue.put(pkt)
             log.info(f'[CMD→TX] R{rid:2d} {cmd_str:<25s} | {pkt.hex(" ")}')
-
-
-def _gp_set(p: GpParams, kvs: dict) -> None:
-    mapping = {
-        'mode':     'mode',
-        'temp1':    'temp1',
-        'sust1':    'sust1',
-        'fan1':     'fan1',
-        'fanonly1': 'fanOnly1',
-        'temp2':    'temp2',
-        'sust2':    'sust2',
-        'fan2':     'fan2',
-        'fanonly2': 'fanOnly2',
-        'loop':     'loop',
-        'sound':    'sound',
-        'volume':   'volume',
-    }
-    for k, v in kvs.items():
-        attr = mapping.get(k)
-        if attr:
-            setattr(p, attr, v)
-        else:
-            log.warning(f'[SET] GP 알 수 없는 키: {k!r}')
 
 
 def _if_set(p: IfParams, kvs: dict) -> None:

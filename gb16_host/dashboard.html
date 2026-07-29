@@ -399,67 +399,8 @@
 <div id="grid"></div>
 
 <!-- 프리셋 참조표 -->
-<div id="heat-stats-panel">
-  <h3>🌡 스프링 가열 통계 — 유닛별 상세</h3>
-  <div class="hs-controls">
-    <select id="hs-period" onchange="loadHeatStats()">
-      <option value="hour">최근 1시간</option>
-      <option value="day" selected>오늘 (24h)</option>
-      <option value="week">이번 주 (7일)</option>
-      <option value="month">이번 달 (30일)</option>
-    </select>
-    <button onclick="loadHeatStats()">↻ 새로고침</button>
-    <span id="hs-status">로딩 중...</span>
-  </div>
-  <canvas id="heat-bar-canvas" height="216"></canvas>
-  <div class="hs-legend">
-    <span><span class="hs-dot" style="background:#ff8a65"></span>가열 (HEAT)</span>
-    <span><span class="hs-dot" style="background:#69f0ae"></span>유지 (SUST)</span>
-    <span style="margin-left:8px;color:#555">• R01–R30 = Indeterministic Float  |  R31–R34 = IF Ceiling</span>
-  </div>
-  <div id="heat-table-wrap">
-    <table id="heat-table">
-      <thead>
-        <tr>
-          <th>로봇</th>
-          <th>가열 횟수</th>
-          <th>총 가열</th>
-          <th title="가열 평균/사이클">평균 가열</th>
-          <th title="최단 가열">최단</th>
-          <th title="최장 가열">최장</th>
-          <th>총 유지</th>
-          <th title="유지 평균/사이클">평균 유지</th>
-          <th title="가열+유지 합계">총 활동</th>
-          <th title="측정 최고 온도 S1">최고 S1</th>
-          <th title="측정 최고 온도 S2">최고 S2</th>
-          <th title="가열중 평균 온도 S1">평균 S1</th>
-          <th title="가열중 평균 온도 S2">평균 S2</th>
-        </tr>
-      </thead>
-      <tbody id="hs-tbody">
-        <tr><td colspan="13" style="text-align:center;color:#333;padding:20px">데이터 로딩 중...</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- 프리셋 참조표 (원본) -->
 <div id="preset-panel">
-  <h3>🎬 프리셋 참조 (Golden Petals)</h3>
-  <table id="preset-table">
-    <thead><tr><th>#</th><th>이름</th><th>설명</th><th>T목표</th><th>유지</th><th>팬</th></tr></thead>
-    <tbody>
-      <tr class="p-stop"><td>1</td><td>정지</td><td>모든 동작 중단, IDLE</td><td>—</td><td>—</td><td>—</td></tr>
-      <tr><td>2</td><td>유영</td><td>U1·U2 순차 위상 가열, 루프</td><td>38 / 40°C</td><td>20 / 25s</td><td>130 / 155</td></tr>
-      <tr><td>3</td><td>느린 유영</td><td>저온 장시간 유지, 루프</td><td>36 / 36°C</td><td>45 / 45s</td><td>100 / 110</td></tr>
-      <tr><td>4</td><td>교번 유영</td><td>U1↔U2 번갈아 가열 (교번 모드)</td><td>40 / 40°C</td><td>—</td><td>150 / 150</td></tr>
-      <tr><td>5</td><td>활발한 유영</td><td>고온 단시간 반복, 빠른 팬</td><td>42 / 42°C</td><td>8 / 12s</td><td>200 / 220</td></tr>
-      <tr class="p-seq"><td>6</td><td>순차 재생</td><td>2→3→5→… 2분마다 자동 전환</td><td colspan="3">내부 프리셋 순환</td></tr>
-      <tr class="p-seq"><td>7</td><td>랜덤 재생</td><td>2·3·5 중 무작위 선택 반복</td><td colspan="3">내부 프리셋 랜덤</td></tr>
-    </tbody>
-  </table>
-
-  <h3 style="margin-top:16px">🎬 프리셋 참조 (Indeterministic Float)</h3>
+  <h3>🎬 프리셋 참조 (Indeterministic Float / IF Ceiling)</h3>
   <table id="preset-table-if">
     <thead><tr><th>#</th><th>이름</th><th>설명</th><th>T목표</th><th>유지</th><th>팬</th></tr></thead>
     <tbody>
@@ -1097,7 +1038,7 @@ function renderHeatBar(robots) {
     ctx.fillStyle = isIF ? '#69f0ae' : '#aaa';
     ctx.font = Math.min(barH - 2, 10) + 'px monospace';
     ctx.textAlign = 'right';
-    const shortName = r.name.replace('Golden Petals ', 'GP ').replace('Indet. Float ', 'IF ');
+    const shortName = r.name.replace('Indet. Float ', 'IF ').replace('IF Ceiling ', 'IFC ');
     ctx.fillText(shortName, labelW - 4, y + barH * 0.78);
 
     // 가열 횟수 + 합계 시간 표시

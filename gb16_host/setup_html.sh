@@ -119,6 +119,19 @@ else:
         t, flags=re.DOTALL
     )
 
+# 7. GP 프리셋 참조표 제거 (IF 참조표만 유지), 헤더 텍스트 수정
+t = re.sub(
+    r'<!-- 프리셋 참조표.*?<h3 style="margin-top:16px">🎬 프리셋 참조 \(Indeterministic Float\)</h3>',
+    '<!-- 프리셋 참조표 -->\n<div id="preset-panel">\n  <h3>🎬 프리셋 참조 (Indeterministic Float / IF Ceiling)</h3>',
+    t, flags=re.DOTALL
+)
+
+# 8. shortName에서 Golden Petals 제거
+t = t.replace(
+    "r.name.replace('Golden Petals ', 'GP ').replace('Indet. Float ', 'IF ')",
+    "r.name.replace('Indet. Float ', 'IF ').replace('IF Ceiling ', 'IFC ')"
+)
+
 f.write_text(t, encoding='utf-8')
 print("[OK] dashboard.html GB16 변환 완료")
 PYEOF
@@ -202,7 +215,7 @@ t = re.sub(
     t
 )
 
-# 6. 로봇 그리드 레이블 교체 (GP → IF A/B/Ceiling)
+# 6. 그룹 레이블 교체
 t = re.sub(
     r'<div class="grid-label"><span>황금빛 꽃  \(R01 – R08\)</span>.*?</label></div>',
     '<div class="grid-label"><span>비결정적 유영 A  (R01 – R15)</span>'
@@ -241,6 +254,13 @@ t = t.replace('GP R01–R12</span><span class="man-val">황금빛 꽃잎 (초록
               'IF R01–R30</span><span class="man-val">비결정적 유영 (보라 테두리')
 t = t.replace('IF R13–R18</span><span class="man-val">비결정적 유영 (보라 테두리)',
               'IF Ceiling R31–R34</span><span class="man-val">IF Ceiling (파랑 테두리')
+
+# 9. GP 프리셋 레이블·버튼 섹션 제거
+t = re.sub(
+    r'<div class="preset-label">GP \(Golden Petals\)</div>\s*<div class="preset-grid"[^>]*>.*?</div>',
+    '',
+    t, flags=re.DOTALL
+)
 
 # 9. 스태거드 버튼 + JS 추가
 stagger_js = (
