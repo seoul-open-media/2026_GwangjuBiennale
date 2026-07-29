@@ -262,6 +262,20 @@ t = re.sub(
     t, flags=re.DOTALL
 )
 
+# 10. renderAll() — 존재하지 않는 grid ID 사용 수정
+t = t.replace(
+    "  document.getElementById('grid-gf').innerHTML   = GF_IDS.map(id  => renderCard(robots[id])).join('');\n"
+    "  document.getElementById('grid-gp1').innerHTML  = GP1_IDS.map(id => renderCard(robots[id])).join('');\n"
+    "  document.getElementById('grid-gp2').innerHTML  = GP2_IDS.map(id => renderCard(robots[id])).join('');\n"
+    "  document.getElementById('grid-if').innerHTML   = IF_IDS.map(id  => renderCard(robots[id])).join('');",
+    "  document.getElementById('grid-ifa').innerHTML  = IF_IDS_A.map(id => renderCard(robots[id])).join('');\n"
+    "  document.getElementById('grid-ifb').innerHTML  = IF_IDS_B.map(id => renderCard(robots[id])).join('');\n"
+    "  document.getElementById('grid-ceil').innerHTML = IF_CEIL.map(id  => renderCard(robots[id])).join('');",
+)
+
+# 11. 잔여 grid-gf div 제거 (GF_IDS = [] 이므로 불필요)
+t = t.replace('      <div class="robot-grid" id="grid-gf"></div>\n', '')
+
 # 9. 스태거드 버튼 + JS 추가
 stagger_js = (
     '\nfunction staggerStart() {\n'

@@ -1511,7 +1511,6 @@ body {
   <div id="grid-area">
     <div id="grid-scroll">
       <div class="grid-label"><span>비결정적 유영 A  (R01 – R15)</span><label class="ar-cb" id="ar-label-ifa"><input type="checkbox" id="ar-ifa" onchange="toggleAutoReset('ifa',this)"> 자동리셋</label></div>
-      <div class="robot-grid" id="grid-gf"></div>
       <div class="robot-grid" id="grid-ifa"></div>
       <div class="grid-label"><span>비결정적 유영 B  (R16 – R30)</span><label class="ar-cb" id="ar-label-ifb"><input type="checkbox" id="ar-ifb" onchange="toggleAutoReset('ifb',this)"> 자동리셋</label></div>
       <div class="robot-grid" id="grid-ifb"></div>
@@ -2832,10 +2831,9 @@ function renderCard(r) {
 }
 
 function renderAll() {
-  document.getElementById('grid-gf').innerHTML   = GF_IDS.map(id  => renderCard(robots[id])).join('');
-  document.getElementById('grid-gp1').innerHTML  = GP1_IDS.map(id => renderCard(robots[id])).join('');
-  document.getElementById('grid-gp2').innerHTML  = GP2_IDS.map(id => renderCard(robots[id])).join('');
-  document.getElementById('grid-if').innerHTML   = IF_IDS.map(id  => renderCard(robots[id])).join('');
+  document.getElementById('grid-ifa').innerHTML  = IF_IDS_A.map(id => renderCard(robots[id])).join('');
+  document.getElementById('grid-ifb').innerHTML  = IF_IDS_B.map(id => renderCard(robots[id])).join('');
+  document.getElementById('grid-ceil').innerHTML = IF_CEIL.map(id  => renderCard(robots[id])).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
