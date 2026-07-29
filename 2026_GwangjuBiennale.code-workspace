@@ -30,6 +30,14 @@
     {
       "name": "hardware_test",
       "path": "hardware_test"
+    },
+    {
+      "name": "Domino",
+      "path": "Domino"
+    },
+    {
+      "name": "gb16_host1",
+      "path": "gb16_host1"
     }
   ],
   "settings": {
