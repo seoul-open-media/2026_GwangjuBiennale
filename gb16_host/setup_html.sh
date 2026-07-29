@@ -96,9 +96,10 @@ t = re.sub(
     t
 )
 
-# 6. 그룹 레이블 교체
+# 6. 그룹 레이블 교체 (황금빛 꽃 행 포함 전부 교체)
 old_groups = (
-    "{ label: '황금빛 꽃잎 1  [R9\u2013R10]', cls: 'gp1', ids: [9,10] },\n"
+    "{ label: '황금빛 꽃  [R1\u2013R8]',    cls: 'gf',  ids: [1,2,3,4,5,6,7,8] },\n"
+    "  { label: '황금빛 꽃잎 1  [R9\u2013R10]', cls: 'gp1', ids: [9,10] },\n"
     "  { label: '황금빛 꽃잎 2  [R11\u2013R12]',cls: 'gp2', ids: [11,12] },\n"
     "  { label: '비결정적 유영  [R13\u2013R18]', cls: 'if',  ids: [13,14,15,16,17,18] },"
 )
@@ -114,7 +115,7 @@ if old_groups in t:
 else:
     # 원문 형식이 다를 경우 정규식으로 대체
     t = re.sub(
-        r"\{ label: '황금빛 꽃잎 1.*?ids: \[13[^\]]*\] \},",
+        r"\{ label: '황금빛 꽃  \[R1.*?\{ label: '황금빛 꽃잎 1.*?ids: \[13[^\]]*\] \},",
         new_groups,
         t, flags=re.DOTALL
     )
