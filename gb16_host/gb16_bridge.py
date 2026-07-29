@@ -817,7 +817,7 @@ def update_temp_rate(robot_id: int, s1: float, s2: float) -> tuple:
         return 0.0, 0.0
     rate1 = (hist[-1][1] - hist[0][1]) / dt
     rate2 = (hist[-1][2] - hist[0][2]) / dt
-    alerted_temp_rate[robot_id] = max(rate1, rate2) >= TEMP_RATE_WARN
+    alerted_temp_rate[robot_id] = max(abs(rate1), abs(rate2)) >= TEMP_RATE_WARN
     return rate1, rate2
 
 
@@ -888,7 +888,7 @@ def parse_xbee_packet(data: bytes) -> list:
             state      = STATE_NAMES.get(pkt[8], '?')
             elapsed    = pkt[9] * 253 + pkt[10]
             sw         = pkt[11]
-            state2     = STATE_NAMES.get(pkt[11], '?')
+            state2     = state   # IF는 단일 상태 — pkt[11]은 switch(0/1), state 아님
             sw_el      = pkt[12] * 253 + pkt[13]
             amb        = (pkt[14] * 253 + pkt[15]) / 100.0
             pkt_num    = pkt[16] * 253 + pkt[17]
