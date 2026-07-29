@@ -48,12 +48,6 @@ body {
   border-radius: 4px;
 }
 #topbar a:hover { background: #7eb8f722; }
-#mqtt-cfg-btn {
-  background: none; border: 1px solid #2a2d45; border-radius: 4px;
-  color: #7eb8f7; cursor: pointer; font-size: 0.82rem; padding: 2px 7px;
-  white-space: nowrap;
-}
-#mqtt-cfg-btn:hover { background: #7eb8f722; }
 /* ── 접속정보 패널 ───────────────────────────────────────────────────────── */
 #access-panel {
   background: #13162a;
@@ -89,36 +83,6 @@ body {
 }
 #access-panel .ap-copy:hover { background: #2a2d3a; }
 #access-panel .ap-copy.copied { color: #69f0ae; border-color: #69f0ae44; }
-/* ── MQTT 인증 설정 패널 ────────────────────────────────────────────────── */
-#mqtt-cfg-panel {
-  background: #13162a;
-  border-bottom: 1px solid #2a2d45;
-  padding: 6px 16px;
-  display: none;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  font-size: 0.78rem;
-}
-#mqtt-cfg-panel label { color: #888; white-space: nowrap; }
-#mqtt-cfg-panel input {
-  padding: 3px 8px; background: #0d0f18;
-  border: 1px solid #2a2d45; border-radius: 4px;
-  color: #c8cfe8; font-size: 0.78rem; min-width: 0;
-}
-#mqtt-cfg-panel input[type=text]     { width: 220px; }
-#mqtt-cfg-panel input[type=password] { width: 130px; }
-#mqtt-cfg-panel .cfg-apply {
-  padding: 3px 12px; background: #1a5fb4; border: none;
-  border-radius: 4px; color: #fff; cursor: pointer; font-size: 0.78rem;
-}
-#mqtt-cfg-panel .cfg-apply:hover { background: #2370c8; }
-#mqtt-cfg-panel .cfg-clear {
-  padding: 3px 8px; background: none; border: 1px solid #555;
-  border-radius: 4px; color: #888; cursor: pointer; font-size: 0.78rem;
-}
-
 /* ── 메인 레이아웃 ──────────────────────────────────────────────────────── */
 #main {
   display: flex;
@@ -1095,8 +1059,6 @@ body {
 <div id="topbar">
   <h1>🎛 GB16 2026 광주비엔날레 — 로봇 제어</h1>
   <div id="mqtt-status">MQTT 연결 중...</div>
-  <button id="mqtt-cfg-btn" onclick="toggleMqttCfg()" title="MQTT 인증 설정">🔐 인증</button>
-  <button onclick="openStats()" title="전시 통계" style="font-size:0.75rem;padding:3px 8px;border:1px solid #7eb8f744;border-radius:4px;background:transparent;color:#7eb8f7;cursor:pointer;">📊 통계</button>
   <button onclick="toggleAccessPanel()" title="접속 URL 복사" style="font-size:0.75rem;padding:3px 8px;border:1px solid #7eb8f744;border-radius:4px;background:transparent;color:#7eb8f7;cursor:pointer;">🔗 접속정보</button>
   <button onclick="toggleManual()" title="스텝 매뉴얼" style="font-size:0.75rem;padding:3px 8px;border:1px solid #69f0ae44;border-radius:4px;background:transparent;color:#69f0ae;cursor:pointer;">📋 매뉴얼</button>
   <a href="dashboard.html" target="_blank" rel="noopener">📊 모니터링</a>
@@ -1240,17 +1202,6 @@ body {
   </div><!-- /manual-box -->
 </div><!-- /manual-overlay -->
 
-<!-- ── MQTT 인증 설정 패널 ──────────────────────────────────────────────── -->
-<div id="mqtt-cfg-panel">
-  <label>브로커 URL</label>
-  <input type="text" id="cfg-broker" placeholder="wss://broker:8884/mqtt  (비우면 기본값)">
-  <label>사용자명</label>
-  <input type="text" id="cfg-user" placeholder="username" autocomplete="username">
-  <label>비밀번호</label>
-  <input type="password" id="cfg-pass" placeholder="password" autocomplete="current-password">
-  <button class="cfg-apply" onclick="applyMqttCfg()">✅ 적용 &amp; 재연결</button>
-  <button class="cfg-clear" onclick="clearMqttCfg()">초기화</button>
-</div>
 
 <!-- ── 메인 ──────────────────────────────────────────────────────────────── -->
 <div id="main">
@@ -1674,16 +1625,14 @@ const BROKER     = 'ws://YOUR_GB16_IP_HERE:9001/mqtt';
 const BROKER_ALT = 'ws://localhost:9001/mqtt';
 const BROKER_EXT = 'wss://k890ff91.ala.asia-southeast1.emqxsl.com:8084/mqtt';  // 외부 접속용 (ngrok 경유)
 
-// ── MQTT 인증 (localStorage 저장 — 페이지 새로고침 후에도 유지) ─────────
-let mqttBrokerOverride = localStorage.getItem('mqttBroker') || '';
-let mqttUser           = localStorage.getItem('mqttUser')   || 'gb16_host';
-let mqttPass           = localStorage.getItem('mqttPass')   || 'som123';
+const mqttBrokerOverride = '';
+const mqttUser = 'gb16_host';
+const mqttPass = 'som123';
 
 function toggleAccessPanel() {
   const p = document.getElementById('access-panel');
   const visible = p.style.display === 'flex';
   p.style.display = visible ? 'none' : 'flex';
-  if (!visible) document.getElementById('mqtt-cfg-panel').style.display = 'none';
 }
 function toggleManual() {
   document.getElementById('manual-overlay').classList.toggle('open');
@@ -1724,37 +1673,8 @@ function apCopy(id, btn) {
     setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1800);
   });
 }
-function toggleMqttCfg() {
-  const p = document.getElementById('mqtt-cfg-panel');
-  const visible = p.style.display !== 'none' && p.style.display !== '';
-  p.style.display = visible ? 'none' : 'flex';
-  if (!visible) document.getElementById('access-panel').style.display = 'none';
-  if (!visible) {
-    document.getElementById('cfg-broker').value = mqttBrokerOverride;
-    document.getElementById('cfg-user').value   = mqttUser;
-    document.getElementById('cfg-pass').value   = mqttPass;
-  }
-}
 
-function applyMqttCfg() {
-  mqttBrokerOverride = document.getElementById('cfg-broker').value.trim();
-  mqttUser           = document.getElementById('cfg-user').value;
-  mqttPass           = document.getElementById('cfg-pass').value;
-  localStorage.setItem('mqttBroker', mqttBrokerOverride);
-  localStorage.setItem('mqttUser',   mqttUser);
-  localStorage.setItem('mqttPass',   mqttPass);
-  document.getElementById('mqtt-cfg-panel').style.display = 'none';
-  if (mqttClient) { mqttClient.end(true); mqttClient = null; }
-  connectMqtt(false);
-}
 
-function clearMqttCfg() {
-  ['mqttBroker','mqttUser','mqttPass'].forEach(k => localStorage.removeItem(k));
-  mqttBrokerOverride = mqttUser = mqttPass = '';
-  ['cfg-broker','cfg-user','cfg-pass'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-}
 const IF_IDS_A   = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];  // 비결정적 유영 A
 const IF_IDS_B   = [16,17,18,19,20,21,22,23,24,25,26,27,28,29,30];  // 비결정적 유영 B
 const IF_CEIL    = [31,32,33,34];    // IF Ceiling
@@ -3220,232 +3140,6 @@ function openFullErrorLog() {
   w.document.close();
 }
 
-</script>
-
-<!-- ── 통계 모달 ──────────────────────────────────────────────────────────── -->
-<div id="stats-overlay" style="display:none;position:fixed;inset:0;background:#000a;z-index:1000;overflow-y:auto;">
-  <div style="max-width:980px;margin:24px auto;background:#13162a;border:1px solid #1e2235;border-radius:12px;padding:20px 24px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <h2 style="font-size:1rem;font-weight:700;color:#7eb8f7;">📊 전시 통계</h2>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <select id="stats-period" style="background:#1e2235;border:1px solid #2a3050;color:#c8cfe8;border-radius:4px;padding:4px 8px;font-size:0.78rem;">
-          <option value="hour">최근 1시간</option>
-          <option value="day" selected>오늘 (24h)</option>
-          <option value="week">이번 주 (7일)</option>
-          <option value="month">이번 달 (30일)</option>
-        </select>
-        <button onclick="loadStats()" style="padding:4px 12px;background:#7eb8f722;border:1px solid #7eb8f744;color:#7eb8f7;border-radius:4px;cursor:pointer;font-size:0.78rem;">새로고침</button>
-        <button onclick="closeStats()" style="padding:4px 10px;background:#f4433611;border:1px solid #f4433644;color:#f44336;border-radius:4px;cursor:pointer;font-size:0.82rem;">✕</button>
-      </div>
-    </div>
-
-    <!-- 요약 카드 -->
-    <div id="stats-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:18px;"></div>
-
-    <!-- 차트 영역 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
-        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:4px;">관람객 방문 빈도</div>
-        <div style="font-size:0.62rem;color:#444;margin-bottom:8px;">전체 = CAM1 ∪ CAM2 동일 공간 합산</div>
-        <canvas id="chart-audience" height="170"></canvas>
-      </div>
-      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
-        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:8px;">가열 사이클 횟수</div>
-        <canvas id="chart-heat-cycle" height="170"></canvas>
-      </div>
-    </div>
-
-    <!-- 로봇별 가열 시간 테이블 -->
-    <div style="margin-top:14px;background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
-      <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:10px;">로봇별 SMA 가열 시간 (누적)</div>
-      <div id="stats-heat-table" style="overflow-x:auto;"></div>
-    </div>
-
-    <!-- 하단: Fault + 사운드 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
-      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
-        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:8px;">고장 이력</div>
-        <div id="stats-fault" style="font-size:0.78rem;line-height:1.8;"></div>
-      </div>
-      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
-        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:8px;">사운드 재생 통계</div>
-        <div id="stats-sound" style="font-size:0.78rem;line-height:1.8;"></div>
-      </div>
-    </div>
-
-    <div id="stats-status" style="margin-top:10px;font-size:0.68rem;color:#444;text-align:right;"></div>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<script>
-// ── 통계 모달 ──────────────────────────────────────────────────────────────
-// /api/stats 상대경로 사용 → 내부/외부/터널 어디서든 자동으로 동작
-const STATS_API = '/api/stats';
-let _chartAud   = null;
-let _chartCycle = null;
-let _chartCam1  = null;
-let _chartCam2  = null;
-
-function openStats() {
-  document.getElementById('stats-overlay').style.display = 'block';
-  loadStats();
-}
-function closeStats() {
-  document.getElementById('stats-overlay').style.display = 'none';
-}
-
-async function loadStats() {
-  const period = document.getElementById('stats-period').value;
-  const statusEl = document.getElementById('stats-status');
-  statusEl.textContent = '불러오는 중...';
-  try {
-    const res  = await fetch(`${STATS_API}?period=${period}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    renderStats(data);
-    statusEl.textContent = `마지막 업데이트: ${new Date().toLocaleTimeString('ko-KR', { hour12: false })}`;
-  } catch (e) {
-    statusEl.textContent = `⚠ API 오류: ${e.message} (bridge.py 실행 중이어야 합니다)`;
-  }
-}
-
-function _card(label, value, color) {
-  return `<div style="background:#1e2235;border:1px solid #2a3050;border-radius:8px;padding:10px 12px;">
-    <div style="font-size:0.68rem;color:#555;margin-bottom:4px;">${label}</div>
-    <div style="font-size:1.3rem;font-weight:700;color:${color || '#c8cfe8'};">${value}</div>
-  </div>`;
-}
-
-function renderStats(d) {
-  const aud = d.audience;
-  const totalHeatS = d.heat.by_robot.reduce((s, r) => s + r.total_s, 0);
-  const totalCycles = d.heat.by_robot.reduce((s, r) => s + r.heat_cycles, 0);
-  const faultTotal = d.faults.reduce((s, f) => s + f.count, 0);
-
-  // 요약 카드
-  document.getElementById('stats-summary').innerHTML = [
-    _card('총 방문 횟수',     aud.total_visits + '회',                         '#69f0ae'),
-    _card('CAM1 방문',        (aud.cam1 ? aud.cam1.total_visits : '-') + '회', '#69f0ae'),
-    _card('CAM2 방문',        (aud.cam2 ? aud.cam2.total_visits : '-') + '회', '#4fc3f7'),
-    _card('평균 체류 시간',   fmtDur(aud.avg_duration_s),                      '#4fc3f7'),
-    _card('총 가열 시간',     fmtDur(totalHeatS),                              '#ff9860'),
-    _card('가열 사이클',      totalCycles + '회',                              '#ffb74d'),
-    _card('고장 발생',        faultTotal + '건',   faultTotal ? '#f44336' : '#555'),
-    _card('사운드 재생',      d.sound.filter(s => s.action !== 'STOP').reduce((a,b)=>a+b.count,0) + '회', '#ffd54f'),
-  ].join('');
-
-  // 관람객 차트 (전체 + CAM1 + CAM2 같은 차트에 겹쳐서 표시)
-  const audCtx = document.getElementById('chart-audience').getContext('2d');
-  if (_chartAud) _chartAud.destroy();
-  _chartAud = new Chart(audCtx, {
-    type: 'bar',
-    data: {
-      labels: aud.labels,
-      datasets: [
-        { label: '전체 (CAM1∪CAM2)', data: aud.total_counts,
-          backgroundColor: '#c8cfe822', borderColor: '#c8cfe8', borderWidth: 2, type: 'line',
-          tension: 0.3, pointRadius: 2, fill: false, order: 1 },
-        { label: '🎥 CAM1 영역', data: aud.cam1 ? aud.cam1.counts : [],
-          backgroundColor: '#69f0ae55', borderColor: '#69f0ae', borderWidth: 1, order: 2 },
-        { label: '🎥 CAM2 영역', data: aud.cam2 ? aud.cam2.counts : [],
-          backgroundColor: '#4fc3f733', borderColor: '#4fc3f7', borderWidth: 1, order: 3 },
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: true, labels: { color: '#888', font: { size: 10 }, boxWidth: 12 } }
-      },
-      scales: {
-        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' } },
-        y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' }, beginAtZero: true }
-      }
-    }
-  });
-
-  // (구 cam1/cam2 개별 차트 — 통합 차트로 대체됨)
-
-  // 가열 사이클 차트
-  const cycCtx = document.getElementById('chart-heat-cycle').getContext('2d');
-  if (_chartCycle) _chartCycle.destroy();
-  _chartCycle = new Chart(cycCtx, {
-    type: 'bar',
-    data: {
-      labels: d.heat.labels,
-      datasets: [{ label: '사이클', data: d.heat.cycle_counts, backgroundColor: '#ff986055', borderColor: '#ff9860', borderWidth: 1 }]
-    },
-    options: { responsive: true, plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' } },
-                y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' }, beginAtZero: true } } }
-  });
-
-  // 로봇별 가열 테이블
-  if (d.heat.by_robot.length === 0) {
-    document.getElementById('stats-heat-table').innerHTML = '<span style="color:#555">데이터 없음</span>';
-  } else {
-    const rows = d.heat.by_robot.map(r => {
-      const bar = Math.min(Math.round(r.total_s / 3600 * 100 / Math.max(...d.heat.by_robot.map(x => x.total_s / 3600), 1)), 100);
-      return `<tr>
-        <td style="color:#888;padding:3px 6px;white-space:nowrap;">${r.name}</td>
-        <td style="color:#ff9860;padding:3px 6px;text-align:right;">${fmtDur(r.heat_s)}</td>
-        <td style="color:#ffb74d;padding:3px 6px;text-align:right;">${fmtDur(r.sust_s)}</td>
-        <td style="color:#c8cfe8;padding:3px 6px;text-align:right;font-weight:600;">${fmtDur(r.total_s)}</td>
-        <td style="color:#555;padding:3px 6px;text-align:right;">${r.heat_cycles}회</td>
-        <td style="padding:3px 8px;min-width:80px;">
-          <div style="background:#1e2235;border-radius:3px;height:6px;">
-            <div style="width:${bar}%;background:#ff9860;border-radius:3px;height:100%;"></div>
-          </div></td>
-      </tr>`;
-    }).join('');
-    document.getElementById('stats-heat-table').innerHTML =
-      `<table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
-        <thead><tr style="color:#444;font-size:0.68rem;">
-          <th style="text-align:left;padding:2px 6px;">로봇</th>
-          <th style="text-align:right;padding:2px 6px;">HEAT</th>
-          <th style="text-align:right;padding:2px 6px;">SUST</th>
-          <th style="text-align:right;padding:2px 6px;">합계</th>
-          <th style="text-align:right;padding:2px 6px;">사이클</th>
-          <th></th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-  }
-
-  // Fault 요약
-  document.getElementById('stats-fault').innerHTML = d.faults.length
-    ? d.faults.map(f => `<div><span style="color:#f44336;">R${String(f.robot_id).padStart(2,'0')}</span> code=${f.fault_code} — <b>${f.count}회</b></div>`).join('')
-    : '<span style="color:#555">고장 없음</span>';
-
-  // 사운드 요약
-  const soundMap = {};
-  d.sound.forEach(s => {
-    if (!soundMap[s.track]) soundMap[s.track] = {};
-    soundMap[s.track][s.action] = s.count;
-  });
-  const soundHtml = Object.entries(soundMap).map(([trk, acts]) => {
-    const plays = (acts['PLAY'] || 0) + (acts['LOOP'] || 0);
-    return `<div>트랙 <b style="color:#ffd54f;">${trk}</b> — 재생 ${plays}회 / 정지 ${acts['STOP'] || 0}회</div>`;
-  }).join('');
-  document.getElementById('stats-sound').innerHTML = soundHtml || '<span style="color:#555">데이터 없음</span>';
-}
-
-function fmtDur(sec) {
-  if (!sec || sec < 1) return '—';
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-// ESC로 닫기
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStats(); });
-document.getElementById('stats-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('stats-overlay')) closeStats();
-});
 
 function staggerStart() {
   var interval = parseInt(prompt("그룹 간격 (초, 기본 20):", "20") || "20");

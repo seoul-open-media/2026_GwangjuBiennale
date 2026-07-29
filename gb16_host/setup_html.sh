@@ -276,6 +276,48 @@ t = t.replace(
 # 11. 잔여 grid-gf div 제거 (GF_IDS = [] 이므로 불필요)
 t = t.replace('      <div class="robot-grid" id="grid-gf"></div>\n', '')
 
+# 12. 🔐 인증 버튼 제거
+t = re.sub(r'  <button id="mqtt-cfg-btn"[^\n]+\n', '', t)
+
+# 13. 📊 통계 버튼 제거
+t = re.sub(r'  <button onclick="openStats\(\)"[^\n]+\n', '', t)
+
+# 14. 인증 CSS 제거: #mqtt-cfg-btn + #mqtt-cfg-btn:hover
+t = re.sub(r'#mqtt-cfg-btn \{[^}]+\}\n#mqtt-cfg-btn:hover \{[^}]+\}\n', '', t)
+
+# 15. 인증 CSS 패널 블록 제거 (/* ── MQTT 인증 설정 패널 */ ~ .cfg-clear 마지막 규칙)
+t = re.sub(r'/\* ── MQTT 인증 설정 패널.*?#mqtt-cfg-panel \.cfg-clear \{.*?\}\n\n',
+           '', t, flags=re.DOTALL)
+
+# 16. 인증 HTML 패널 div 제거
+t = re.sub(r'\n<!-- ── MQTT 인증 설정 패널.*?-->\n<div id="mqtt-cfg-panel">.*?</div>\n',
+           '\n', t, flags=re.DOTALL)
+
+# 17. 인증 JS 변수 (localStorage) 제거 → 하드코딩 자격증명 상수로 교체
+t = re.sub(
+    r'// ── MQTT 인증 \(localStorage[^\n]*\n'
+    r'let mqttBrokerOverride[^\n]*\n'
+    r'let mqttUser[^\n]*\n'
+    r'let mqttPass[^\n]*\n',
+    "const mqttBrokerOverride = '';\n"
+    "const mqttUser = 'gb16_host';\n"
+    "const mqttPass = 'som123';\n",
+    t
+)
+
+# 18. toggleAccessPanel 내 mqtt-cfg-panel 숨기기 코드 제거
+t = t.replace(
+    "  if (!visible) document.getElementById('mqtt-cfg-panel').style.display = 'none';\n",
+    ''
+)
+
+# 19. 인증 관련 JS 함수 3개 제거
+for fn in ('toggleMqttCfg', 'applyMqttCfg', 'clearMqttCfg'):
+    t = re.sub(r'\nfunction ' + fn + r'\(\) \{.*?\n}\n', '\n', t, flags=re.DOTALL)
+
+# 20. 통계 모달 HTML + chart.js + 통계 JS 스크립트 블록 전체 제거
+t = re.sub(r'\n\n<!-- ── 통계 모달 ──[^\n]*\n.*?</body>', '\n</body>', t, flags=re.DOTALL)
+
 # 9. 스태거드 버튼 + JS 추가
 stagger_js = (
     '\nfunction staggerStart() {\n'
