@@ -5,28 +5,24 @@
       "path": "Indeterministic_Float"
     },
     {
+      "name": "IF_ceiling",
+      "path": "IF_ceiling"
+    },
+    {
       "name": "IF_test",
       "path": "IF_test"
     },
     {
-      "name": "Golden_Petals",
-      "path": "Golden_Petals"
+      "name": "Bell_shaker",
+      "path": "Bell_shaker"
     },
     {
-      "name": "host",
-      "path": "host"
+      "name": "gb16_host",
+      "path": "gb16_host"
     },
     {
       "name": "tools",
       "path": "tools"
-    },
-    {
-      "name": "audio_shield",
-      "path": "audio_shield"
-    },
-    {
-      "name": "light",
-      "path": "light"
     },
     {
       "path": "tools/sensor_test"
@@ -34,14 +30,6 @@
     {
       "name": "hardware_test",
       "path": "hardware_test"
-    },
-    {
-      "name": "hidden_sound_path",
-      "path": "hidden_sound_path"
-    },
-    {
-      "name": "Bell_shaker",
-      "path": "Bell_shaker"
     }
   ],
   "settings": {

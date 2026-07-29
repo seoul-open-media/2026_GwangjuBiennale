@@ -1,7 +1,7 @@
 #pragma once
 // ════════════════════════════════════════════════════════════════════
 //  config.h  —  핀 / 상수 / 전역 타입 정의
-//  Robot: Inditerministic floating
+//  Robot: IF Ceiling
 // ════════════════════════════════════════════════════════════════════
 
 // ── 핀 ──────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@
 #define STATUS_PKT_LEN  23   // STATUS 패킷 (Teensy→PD) 송신 길이
 #define START_B    255
 #define END_B      254
-#define MY_ROBOT_ID   1 // ★ 유닛마다 1~30 중 해당 번호로 변경하여 업로드
+#define MY_ROBOT_ID  31 // ★ 유닛마다 31 / 32 / 33 / 34 로 변경하여 업로드
 
 // ── 상태 열거형 ──────────────────────────────────────────────────────
 enum State { IDLE, HEATING, SUSTAINING, COOLING, SENSOR_ERROR };

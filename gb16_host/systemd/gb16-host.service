@@ -1,0 +1,16 @@
+[Unit]
+Description=GB16 2026 광주비엔날레 시리얼 게이트웨이 (gb16_host.py)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host
+ExecStart=/usr/bin/python3 %h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/gb16_host.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/gb16_host.log
+StandardError=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/gb16_host.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

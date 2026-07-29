@@ -1,0 +1,17 @@
+[Unit]
+Description=GB16 2026 광주비엔날레 MQTT 브리지 (gb16_bridge.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host
+ExecStart=/usr/bin/python3 %h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/gb16_bridge.py
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/gb16_bridge.log
+StandardError=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/gb16_bridge.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

@@ -6,3 +6,7 @@ tools/mqtt_monitor/*.log
 host/logs/
 **/__pycache__/
 light/previous_code/
+gb16_host/.env
+gb16_host/logs/
+gb16_host/*.db
+gb16_host/gb16_bridge.log

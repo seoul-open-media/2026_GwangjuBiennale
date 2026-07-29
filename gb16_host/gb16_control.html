@@ -1,0 +1,3476 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GB16 2026 광주비엔날레 — 로봇 제어</title>
+<!-- mqtt.js: 로컬 번들 (CDN 불필요 — 부팅 시 네트워크 미준비 대응) -->
+<script src="mqtt.min.js"></script>
+<style>
+/* ── 기본 ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0d0f18;
+  color: #c8cfe8;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── 상단 바 ────────────────────────────────────────────────────────────── */
+#topbar {
+  background: #13162a;
+  border-bottom: 1px solid #1e2235;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+#topbar h1 { font-size: 0.95rem; font-weight: 600; color: #7eb8f7; white-space: nowrap; }
+#mqtt-status {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: #1e2235;
+  color: #888;
+  flex: 1;
+}
+#topbar a {
+  font-size: 0.75rem;
+  color: #7eb8f7;
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border: 1px solid #7eb8f744;
+  border-radius: 4px;
+}
+#topbar a:hover { background: #7eb8f722; }
+#mqtt-cfg-btn {
+  background: none; border: 1px solid #2a2d45; border-radius: 4px;
+  color: #7eb8f7; cursor: pointer; font-size: 0.82rem; padding: 2px 7px;
+  white-space: nowrap;
+}
+#mqtt-cfg-btn:hover { background: #7eb8f722; }
+/* ── 접속정보 패널 ───────────────────────────────────────────────────────── */
+#access-panel {
+  background: #13162a;
+  border-bottom: 1px solid #2a2d45;
+  padding: 8px 16px;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+#access-panel .ap-title {
+  font-size: 0.72rem; color: #555; letter-spacing: 1px;
+  text-transform: uppercase; margin-bottom: 2px;
+}
+#access-panel .ap-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+#access-panel .ap-label {
+  font-size: 0.7rem; color: #888; width: 72px; flex-shrink: 0;
+}
+#access-panel .ap-url {
+  flex: 1; font-size: 0.72rem; font-family: monospace;
+  background: #0d0f18; border: 1px solid #2a2d45;
+  border-radius: 4px; padding: 4px 8px; color: #c8cfe8;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: text; user-select: all;
+}
+#access-panel .ap-copy {
+  font-size: 0.68rem; padding: 3px 10px;
+  background: #1e2235; color: #7eb8f7;
+  border: 1px solid #3a3d4a; border-radius: 4px; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+}
+#access-panel .ap-copy:hover { background: #2a2d3a; }
+#access-panel .ap-copy.copied { color: #69f0ae; border-color: #69f0ae44; }
+/* ── MQTT 인증 설정 패널 ────────────────────────────────────────────────── */
+#mqtt-cfg-panel {
+  background: #13162a;
+  border-bottom: 1px solid #2a2d45;
+  padding: 6px 16px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+}
+#mqtt-cfg-panel label { color: #888; white-space: nowrap; }
+#mqtt-cfg-panel input {
+  padding: 3px 8px; background: #0d0f18;
+  border: 1px solid #2a2d45; border-radius: 4px;
+  color: #c8cfe8; font-size: 0.78rem; min-width: 0;
+}
+#mqtt-cfg-panel input[type=text]     { width: 220px; }
+#mqtt-cfg-panel input[type=password] { width: 130px; }
+#mqtt-cfg-panel .cfg-apply {
+  padding: 3px 12px; background: #1a5fb4; border: none;
+  border-radius: 4px; color: #fff; cursor: pointer; font-size: 0.78rem;
+}
+#mqtt-cfg-panel .cfg-apply:hover { background: #2370c8; }
+#mqtt-cfg-panel .cfg-clear {
+  padding: 3px 8px; background: none; border: 1px solid #555;
+  border-radius: 4px; color: #888; cursor: pointer; font-size: 0.78rem;
+}
+
+/* ── 메인 레이아웃 ──────────────────────────────────────────────────────── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── 좌측 제어 패널 ─────────────────────────────────────────────────────── */
+#ctrl {
+  width: 300px;
+  min-width: 300px;
+  background: #13162a;
+  border-right: 1px solid #1e2235;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ctrl-section {
+  background: #181b2e;
+  border: 1px solid #1e2235;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.ctrl-section h3 {
+  font-size: 0.72rem;
+  color: #555;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* 그룹 선택 버튼 */
+.group-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+.gbtn {
+  flex: 1;
+  min-width: 60px;
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  border: 1px solid #1e2235;
+  background: #1e2235;
+  color: #aaa;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+}
+.gbtn:hover { background: #2a2f4a; color: #c8cfe8; }
+.gbtn.active { background: #7eb8f722; border-color: #7eb8f7; color: #7eb8f7; }
+#sel-count { font-size: 0.7rem; color: #555; margin-top: 4px; }
+
+/* 파라미터 슬라이더 */
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.param-row label {
+  width: 58px;
+  font-size: 0.72rem;
+  color: #888;
+  flex-shrink: 0;
+}
+.param-row input[type=range] {
+  flex: 1;
+  accent-color: #7eb8f7;
+  height: 4px;
+}
+.param-val {
+  width: 36px;
+  text-align: right;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: #c8cfe8;
+}
+.param-row input[type=number] {
+  width: 52px;
+  background: #1e2235;
+  border: 1px solid #2a3050;
+  color: #c8cfe8;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.78rem;
+  text-align: right;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #888;
+  margin-bottom: 4px;
+}
+.check-row input { accent-color: #7eb8f7; }
+
+/* GP / IF 파라미터 탭 */
+.param-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.ptab {
+  flex: 1;
+  padding: 3px;
+  font-size: 0.72rem;
+  text-align: center;
+  border: 1px solid #1e2235;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #555;
+  background: #1e2235;
+}
+.ptab.active { border-color: #7eb8f7; color: #7eb8f7; background: #7eb8f722; }
+
+/* 명령 버튼 */
+.cmd-btns { display: flex; flex-wrap: wrap; gap: 5px; }
+.cbtn {
+  flex: 1;
+  min-width: 70px;
+  padding: 7px 4px;
+  font-size: 0.75rem;
+  border: 1px solid #1e2235;
+  background: #1e2235;
+  color: #c8cfe8;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+}
+.cbtn:hover  { background: #2a3050; }
+.cbtn.heat   { border-color: #ff784422; color: #ff9860; background: #ff784411; }
+.cbtn.heat:hover { background: #ff784433; }
+.cbtn.cool   { border-color: #4fc3f744; color: #4fc3f7; background: #4fc3f711; }
+.cbtn.cool:hover { background: #4fc3f733; }
+.cbtn.danger { border-color: #f4433644; color: #f44336; background: #f4433611; }
+.cbtn.danger:hover { background: #f4433633; }
+.cbtn.send   { border-color: #7eb8f744; color: #7eb8f7; background: #7eb8f711; }
+.cbtn.send:hover { background: #7eb8f733; }
+
+/* 프리셋 버튼 */
+.preset-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.pbtn {
+  width: 32px;
+  height: 28px;
+  font-size: 0.75rem;
+  border: 1px solid #2a2f4a;
+  background: #1e2235;
+  color: #c8cfe8;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+}
+.pbtn:hover { background: #2a3050; border-color: #7eb8f7; color: #7eb8f7; }
+.pbtn.gp { border-color: #69f0ae33; color: #69f0ae; background: #69f0ae0a; }
+.pbtn.gp:hover { background: #69f0ae22; }
+.pbtn.if { border-color: #ce93d833; color: #ce93d8; background: #ce93d80a; }
+.pbtn.if:hover { background: #ce93d822; }
+
+.preset-label { font-size: 0.68rem; color: #555; margin-bottom: 4px; }
+
+/* 사운드 버튼 */
+.sound-btns { display: flex; gap: 4px; }
+.sndbtn {
+  flex: 1;
+  height: 28px;
+  font-size: 0.75rem;
+  border: 1px solid #ffd54f33;
+  background: #ffd54f0a;
+  color: #ffd54f;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.sndbtn:hover { background: #ffd54f22; }
+.sndbtn-stop {
+  border-color: #ef535033;
+  background: #ef53500a;
+  color: #ef9a9a;
+}
+.sndbtn-stop:hover { background: #ef535022; }
+
+/* 볼륨 슬라이더 */
+.vol-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.vol-row label { font-size: 0.72rem; color: #aaa; white-space: nowrap; }
+.vol-row input[type=range] {
+  flex: 1;
+  accent-color: #ffd54f;
+  height: 4px;
+  cursor: pointer;
+}
+.vol-val {
+  font-size: 0.75rem;
+  color: #ffd54f;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* 반복/한번 토글 */
+.loop-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.loop-btn {
+  flex: 1;
+  padding: 5px 0;
+  font-size: 0.72rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  transition: all .15s;
+}
+.loop-btn.active {
+  border-color: #ffd54f88;
+  background: #ffd54f22;
+  color: #ffd54f;
+}
+
+/* 전원 제어 버튼 */
+.pwr-grid { display: flex; flex-direction: column; gap: 5px; }
+.pwr-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pwr-name {
+  flex: 1;
+  font-size: 0.72rem;
+  color: #aaa;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pwr-id { font-size: 0.62rem; color: #555; margin-right: 2px; }
+.pwr-btns { display: flex; gap: 3px; }
+.pbr {
+  padding: 4px 7px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  border: 1px solid;
+  cursor: pointer;
+  line-height: 1;
+  font-weight: 600;
+}
+.pbr.btn-on    { background: #00c85322; color: #69f0ae; border-color: #00c85344; }
+.pbr.btn-on:hover  { background: #00c85344; }
+.pbr.btn-off   { background: #f4433622; color: #ef9a9a; border-color: #f4433644; }
+.pbr.btn-off:hover { background: #f4433644; }
+.pbr.btn-rst   { background: #ffcc0222; color: #ffcc02; border-color: #ffcc0244; }
+.pbr.btn-rst:hover { background: #ffcc0244; }
+#pwr-log { font-size: 0.68rem; color: #888; margin-top: 5px; min-height: 16px; }
+
+/* 명령 로그 */
+#cmd-log {
+  font-size: 0.7rem;
+  color: #69f0ae;
+  background: #0d0f18;
+  border-radius: 4px;
+  padding: 6px 8px;
+  min-height: 36px;
+  max-height: 80px;
+  overflow-y: auto;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ── 우측 로봇 그리드 ───────────────────────────────────────────────────── */
+#grid-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#grid-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.grid-label {
+  font-size: 0.7rem;
+  color: #555;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: 4px 0 8px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ar-cb {
+  font-size: 0.68rem;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: normal;
+  white-space: nowrap;
+}
+.ar-cb input[type="checkbox"] { cursor: pointer; accent-color: #f44336; }
+.ar-cb.active { color: #f44336; }
+
+.robot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.robot-card {
+  background: #181b2e;
+  border: 2px solid #1e2235;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+  user-select: none;
+}
+.robot-card:hover { background: #1e2235; }
+.robot-card.selected {
+  border-color: #7eb8f7;
+  background: #7eb8f710;
+}
+.robot-card.offline { opacity: 0.62; filter: grayscale(40%); }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.card-id { font-size: 1.0rem; font-weight: 700; color: #c8cfe8; }
+.type-badge {
+  font-size: 0.62rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.type-gp { background: #69f0ae22; color: #69f0ae; border: 1px solid #69f0ae44; }
+.type-if { background: #ce93d822; color: #ce93d8; border: 1px solid #ce93d844; }
+
+.state-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.st-IDLE { background: #1e2235; color: #555; }
+.st-HEAT { background: #ff784422; color: #ff9860; }
+.st-SUST { background: #ff980022; color: #ffb74d; }
+.st-COOL { background: #4fc3f722; color: #4fc3f7; }
+.st-ERR  { background: #f4433622; color: #f44336; }
+.st----   { background: #1e2235; color: #555; }
+
+/* GP Unit1/Unit2 행 */
+.gp-units { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.unit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #13162a;
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.unit-label { font-size: 0.68rem; color: #555; width: 20px; flex-shrink: 0; }
+.unit-state { font-size: 0.65rem; font-weight: 600; padding: 1px 5px; border-radius: 3px; }
+.unit-temp  { font-size: 0.82rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.card-temps {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  margin-top: 4px;
+  align-items: center;
+}
+.temp-val { font-variant-numeric: tabular-nums; }
+.temp-high { color: #ff9860; }
+.temp-ok   { color: #69f0ae; }
+.temp-cold { color: #7eb8f7; }
+.amb-val   { color: #555; font-size: 0.7rem; }
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 0.68rem;
+}
+.fault-badge {
+  background: #f4433622;
+  color: #f44336;
+  border: 1px solid #f4433644;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.last-seen { color: #444; }
+.sel-indicator {
+  width: 12px; height: 12px;
+  border: 2px solid #444;
+  border-radius: 3px;
+  background: transparent;
+  flex-shrink: 0;
+}
+.robot-card.selected .sel-indicator {
+  background: #7eb8f7;
+  border-color: #7eb8f7;
+}
+
+.mode-badge {
+  font-size: 0.65rem;
+  color: #ce93d8;
+  background: #ce93d811;
+  border: 1px solid #ce93d833;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* ── 공연 제어 ─────────────────────────────────────────────────── */
+.perf-btns { display: flex; gap: 6px; margin-bottom: 8px; }
+.perf-btn {
+  flex: 1;
+  padding: 10px 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  text-align: center;
+  transition: all 0.2s;
+  border: 2px solid;
+}
+.perf-start { background: #69f0ae11; color: #69f0ae; border-color: #69f0ae44; }
+.perf-start:hover { background: #69f0ae22; }
+.perf-start.active { background: #69f0ae; color: #000; border-color: #69f0ae; box-shadow: 0 0 14px #69f0ae55; }
+.perf-stop  { background: #f4433611; color: #f44336; border-color: #f4433644; }
+.perf-stop:hover  { background: #f4433622; }
+.perf-stop.active { background: #f44336cc; color: #fff; border-color: #f44336; box-shadow: 0 0 14px #f4433655; }
+.mode-select-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.mode-select-row label { font-size: 0.7rem; color: #888; width: 48px; flex-shrink: 0; }
+.mode-select-row select {
+  flex: 1;
+  background: #1e2235; border: 1px solid #2a3050; color: #c8cfe8;
+  border-radius: 4px; padding: 3px 6px; font-size: 0.73rem;
+}
+.aud-status-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px;
+  background: #1e2235; margin-top: 6px; margin-bottom: 4px;
+}
+.aud-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #333; flex-shrink: 0; transition: background 0.4s;
+}
+.aud-dot.present { background: #69f0ae; box-shadow: 0 0 8px #69f0ae88; }
+.aud-status-text { font-size: 0.75rem; color: #888; }
+.freq-bar-wrap { display: flex; align-items: center; gap: 6px; }
+.freq-label { font-size: 0.68rem; color: #555; width: 48px; flex-shrink: 0; }
+.freq-bar { flex: 1; height: 5px; background: #1e2235; border-radius: 3px; overflow: hidden; }
+.freq-fill { height: 100%; background: #69f0ae; border-radius: 3px; transition: width 0.5s, background 0.5s; }
+.freq-val { font-size: 0.68rem; color: #aaa; width: 28px; text-align: right; }
+
+/* ── 카메라 패널 ─────────────────────────────────────────────────── */
+#cam-area {
+  flex-shrink: 0;
+  background: #0d101c;
+  border-top: 1px solid #1e2235;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+}
+.cam-box { display: flex; flex-direction: column; gap: 3px; }
+.cam-label { font-size: 0.62rem; color: #555; text-align: center; letter-spacing: 1px; }
+.cam-img {
+  width: 260px; height: 146px;
+  object-fit: cover; border-radius: 6px;
+  border: 2px solid #1e2235; background: #0d0f18;
+  transition: border-color 0.4s, box-shadow 0.4s;
+}
+.cam-img.present { border-color: #69f0ae; box-shadow: 0 0 10px #69f0ae44; }
+.cam-side-info { display: flex; flex-direction: column; gap: 6px; min-width: 110px; padding-top: 2px; }
+.cam-port-row { display: flex; gap: 4px; align-items: center; }
+.cam-port-row input {
+  background: #1e2235; color: #c8cfe8;
+  border: 1px solid #2a3050; border-radius: 4px;
+  padding: 3px 5px; font-size: 0.73rem; width: 56px;
+}
+.cam-port-row button {
+  background: #2a2d3a; color: #7eb8f7;
+  border: 1px solid #3a3d4a; border-radius: 4px;
+  padding: 3px 7px; font-size: 0.72rem; cursor: pointer;
+}
+.cam-port-row button:hover { background: #3a3d4a; }
+.cam-badge {
+  font-size: 0.82rem; font-weight: 700;
+  padding: 5px 8px; border-radius: 6px;
+  text-align: center; transition: all 0.4s;
+  background: #1e2235; color: #555; border: 1px solid transparent;
+}
+.cam-badge.present { background: #69f0ae22; color: #69f0ae; border-color: #69f0ae55; }
+
+/* ── 조명 패널 (cam-area 우측) ───────────────────────────────────── */
+.cam-light-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  max-width: 240px;
+  align-self: stretch;
+  border-left: 1px solid #1e2235;
+  padding-left: 12px;
+}
+.cam-light-panel .lp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.cam-light-panel .lp-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f0c040;
+  letter-spacing: 0.5px;
+}
+.cam-light-panel .lp-gui-btn {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  background: #1e2235;
+  color: #7eb8f7;
+  border: 1px solid #3a3d4a;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cam-light-panel .lp-gui-btn:hover { background: #2a2d3a; }
+.cam-light-panel .lp-selects {
+  display: flex;
+  gap: 4px;
+}
+.cam-light-panel select {
+  flex: 1;
+  background: #1e2235;
+  color: #c8cfe8;
+  border: 1px solid #2a3050;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.68rem;
+}
+.cam-light-panel .lp-brightness {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: #888;
+}
+.cam-light-panel .lp-brightness input[type=range] {
+  flex: 1;
+  accent-color: #f0c040;
+  height: 4px;
+}
+.cam-light-panel .lp-brightness span { min-width: 30px; color: #ccc; }
+.cam-light-panel .lp-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+}
+.cam-light-panel .lp-btns button {
+  background: #1a1d2e;
+  color: #c8cfe8;
+  border: 1px solid #2a3050;
+  border-radius: 4px;
+  padding: 3px 4px;
+  font-size: 0.65rem;
+  cursor: pointer;
+  text-align: center;
+}
+.cam-light-panel .lp-btns button:hover { background: #2a2d3a; }
+.cam-light-panel .lp-btns button.lp-blackout { background: #2a1010; color: #ff6b6b; border-color: #ff4444; }
+.cam-light-panel .lp-btns button.lp-blackout:hover { background: #3a1a1a; }
+.cam-light-panel .lp-rgbw {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  margin-top: 2px;
+}
+.cam-light-panel .lp-log {
+  font-size: 0.62rem;
+  color: #69f0ae;
+  min-height: 1.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 10분 데모 패널 ───────────────────────────────────────────── */
+.demo-panel {
+  background: #0e1018;
+  border: 1px solid #2a3a2a;
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 6px;
+}
+.demo-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.demo-title  { font-size:0.82rem; font-weight:bold; color:#9f9; }
+.demo-timer  { font-size:1.0rem; font-family:monospace; color:#7be; letter-spacing:1px; }
+.demo-progress-bar {
+  background:#1a1e28; border-radius:3px; height:5px; margin-bottom:8px; overflow:hidden;
+}
+.demo-progress-fill {
+  height:100%; background:linear-gradient(90deg,#3a9f3a,#7be);
+  width:0%; transition:width 0.9s linear;
+}
+.demo-btns { display:flex; gap:6px; margin-bottom:6px; }
+.demo-start {
+  flex:1; background:#0f2a0f; color:#6f6; border:1px solid #4a4;
+  border-radius:4px; padding:7px; cursor:pointer; font-size:0.9rem;
+}
+.demo-start:hover  { background:#1a3a1a; }
+.demo-start:disabled { background:#1a1e28; color:#444; border-color:#333; cursor:not-allowed; }
+.demo-stop {
+  flex:1; background:#2a1010; color:#f88; border:1px solid #f44;
+  border-radius:4px; padding:7px; cursor:pointer; font-size:0.9rem;
+}
+.demo-stop:hover   { background:#3a1a1a; }
+.demo-stop:disabled { background:#1a1e28; color:#444; border-color:#333; cursor:not-allowed; }
+.demo-log  { font-size:0.68rem; color:#6a9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ── 커스텀 타임라인 ────────────────────────────────────────────── */
+.demo-tabs  { display:flex; gap:4px; margin-bottom:8px; }
+.demo-tab   {
+  flex:1; padding:5px 4px; border-radius:4px; border:1px solid #2a3a4a;
+  background:#101520; color:#778; font-size:0.75rem; cursor:pointer;
+}
+.demo-tab:hover  { background:#182030; color:#aac; }
+.demo-tab.dt-active { background:#0d1f30; color:#7be; border-color:#4a7faf; font-weight:bold; }
+.cs-list    { display:flex; flex-direction:column; gap:4px; max-height:280px; overflow-y:auto;
+              padding-right:2px; margin-bottom:4px; }
+.cs-row     { display:grid; grid-template-columns:20px 54px 1fr 1fr 24px;
+              gap:4px; align-items:center; }
+.cs-seq     { font-size:0.65rem; color:#556; text-align:right; }
+.cs-time    { background:#0c1018; color:#9cf; border:1px solid #2a3a4a; border-radius:3px;
+              padding:3px 4px; font-size:0.78rem; font-family:monospace; width:100%;
+              text-align:center; }
+.cs-time:focus  { outline:none; border-color:#4a8fbf; }
+.cs-target, .cs-action {
+  background:#0c1018; color:#bbc; border:1px solid #2a3a4a; border-radius:3px;
+  padding:3px 4px; font-size:0.72rem; width:100%; cursor:pointer;
+}
+.cs-target:focus, .cs-action:focus { outline:none; border-color:#4a8fbf; }
+.cs-del     { background:#2a1010; color:#f66; border:1px solid #6a2a2a; border-radius:3px;
+              padding:2px 5px; font-size:0.75rem; cursor:pointer; line-height:1; }
+.cs-del:hover { background:#3a1818; }
+.cs-add-row { display:flex; align-items:center; gap:6px; margin-top:4px; }
+.cs-add-btn { background:#0f2030; color:#6af; border:1px solid #2a5a8a; border-radius:4px;
+              padding:5px 10px; font-size:0.78rem; cursor:pointer; }
+.cs-add-btn:hover { background:#1a3050; }
+.cs-sort-btn { background:#181828; color:#99b; border:1px solid #3a3a5a; border-radius:4px;
+               padding:5px 8px; font-size:0.78rem; cursor:pointer; }
+.cs-sort-btn:hover { background:#222238; }
+.cs-duration-lbl { font-size:0.72rem; color:#778; margin-left:auto; }
+.cs-duration-lbl b { color:#9be; }
+.cs-empty   { font-size:0.72rem; color:#445; text-align:center; padding:12px 0; }
+
+/* ── Pd 큐 설정 ─────────────────────────────────────────────────── */
+.pd-cue-bar    { margin-top:8px; border-top:1px solid #1e2a1e; padding-top:6px; }
+.pd-cue-toggle { background:none; border:none; color:#7a9; font-size:0.72rem;
+                 cursor:pointer; padding:0; text-decoration:underline dotted; }
+.pd-cue-toggle:hover { color:#af9; }
+.pd-cue-status { font-size:0.68rem; color:#556; margin-left:6px; }
+.pd-cue-cfg    { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; align-items:center; }
+.pd-inp        { background:#0c1018; color:#9cf; border:1px solid #2a3a4a; border-radius:3px;
+                 padding:3px 5px; font-size:0.72rem; min-width:0; flex:1 1 120px; }
+.pd-inp-sm     { flex:0 0 70px; }
+.pd-inp-xs     { flex:0 0 50px; }
+.pd-inp:focus  { outline:none; border-color:#4a8fbf; }
+.pd-save-btn   { background:#0f2030; color:#6af; border:1px solid #2a5a8a; border-radius:3px;
+                 padding:3px 9px; font-size:0.72rem; cursor:pointer; }
+.pd-save-btn:hover { background:#1a3050; }
+.pd-test-btn   { background:#181828; color:#9a7; border:1px solid #3a4a3a; border-radius:3px;
+                 padding:3px 9px; font-size:0.72rem; cursor:pointer; }
+.pd-test-btn:hover { background:#222838; }
+
+/* ── 공연 일정 패널 ──────────────────────────────────────────────── */
+.schedule-panel { margin-top:10px; background:#0c1018; border:1px solid #1e2a1e; border-radius:8px; padding:10px 12px; }
+.schedule-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.schedule-title  { font-size:0.82rem; font-weight:bold; color:#9f9; letter-spacing:1px; }
+.sched-auto-toggle { display:flex; align-items:center; gap:4px; font-size:0.72rem; color:#6a9; cursor:pointer; }
+.sched-countdown-wrap { background:#080c10; border:1px solid #1e3020; border-radius:6px; padding:8px 10px; margin-bottom:8px; text-align:center; }
+.sched-next-label { font-size:0.62rem; color:#556; letter-spacing:1px; margin-bottom:2px; }
+.sched-next-time  { font-size:0.92rem; color:#9f9; font-weight:bold; margin-bottom:2px; }
+.sched-countdown  { font-size:1.5rem; font-family:monospace; color:#7be; letter-spacing:2px; font-weight:bold; }
+.sched-section-title { font-size:0.65rem; color:#556; letter-spacing:1px; margin-bottom:4px; margin-top:6px; }
+.sched-time-list { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; }
+.sched-slot { font-size:0.72rem; background:#0d1f10; border:1px solid #2a4a2a; border-radius:4px; padding:2px 6px; color:#9f9; }
+.sched-slot.sched-past { color:#3a4a3a; border-color:#1a2a1a; background:#080c08; }
+.sched-week-tbl { width:100%; border-collapse:collapse; font-size:0.66rem; margin-top:2px; }
+.sched-week-tbl th { color:#557; padding:2px 2px; text-align:center; border-bottom:1px solid #1e2a1e; font-weight:normal; line-height:1.4; white-space:nowrap; }
+.sched-week-tbl td { color:#5a8a5a; padding:2px 2px; text-align:center; white-space:nowrap; }
+.sched-week-tbl .sw-today th, .sched-week-tbl th.sw-today { color:#9f9; font-weight:bold; background:#0a1a0a; }
+.sched-week-tbl td.sw-today { color:#9f9; background:#0a1a0a; }
+.sched-week-tbl td.sw-past { color:#2a3a2a; }
+.sched-week-tbl th.sw-holiday { color:#f88; }
+
+/* ── 오류 로그 패널 (조명 패널 우측) ───────────────────────────── */
+.cam-error-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+  max-width: 230px;
+  align-self: stretch;
+  border-left: 1px solid #1e2235;
+  padding-left: 12px;
+}
+.cam-error-panel .ep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+.cam-error-panel .ep-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f44336;
+  letter-spacing: 0.5px;
+}
+.cam-error-panel .ep-clear-btn {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  background: #1e2235;
+  color: #aaa;
+  border: 1px solid #3a3d4a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.cam-error-panel .ep-clear-btn:hover { background: #2a2d3a; }
+#error-log {
+  overflow-y: auto;
+  font-size: 0.63rem;
+  line-height: 1.6;
+  font-family: monospace;
+  background: #0a0c16;
+  border: 1px solid #1e2235;
+  border-radius: 4px;
+  padding: 5px 7px;
+  min-height: 60px;
+  max-height: 160px;
+  cursor: pointer;
+}
+#error-log:hover { border-color: #3a3d4a; }
+.err-fault    { color: #f44336; }
+.err-error    { color: #ff7043; }
+.err-offline  { color: #ffd54f; }
+.err-online   { color: #69f0ae; }
+.err-time     { color: #444; margin-right: 4px; }
+
+/* ── 모바일 반응형 ──────────────────────────────────────────────────────── */
+@media (max-width: 800px) {
+  body {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  #main {
+    flex-direction: column;
+    overflow: visible;
+    height: auto;
+  }
+  #ctrl {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    border-right: none;
+    border-bottom: 1px solid #1e2235;
+    overflow: visible;
+    height: auto;
+  }
+  #grid-area {
+    overflow: visible;
+    height: auto;
+    flex: none;
+  }
+  #grid-scroll {
+    overflow: visible;
+    flex: none;
+    height: auto;
+    padding: 8px;
+  }
+  .robot-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 6px;
+  }
+  #cam-area {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    gap: 8px;
+  }
+  .cam-box {
+    width: 100%;
+  }
+  .cam-img {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+  }
+  .cam-side-info {
+    min-width: 0;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding-top: 0;
+  }
+  .cam-light-panel {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid #1e2235;
+    padding-left: 0;
+    padding-top: 8px;
+  }
+  .cam-error-panel {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid #1e2235;
+    padding-left: 0;
+    padding-top: 8px;
+  }
+  #topbar h1 { font-size: 0.82rem; }
+  #topbar { gap: 8px; flex-wrap: wrap; }
+  .param-row label { width: 50px; }
+}
+
+/* ── 매뉴얼 모달 ─────────────────────────────────────────────────── */
+#manual-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.72);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+#manual-overlay.open { display: flex; }
+#manual-box {
+  background: #0d101c;
+  border: 1px solid #2a3050;
+  border-radius: 10px;
+  width: 100%; max-width: 640px;
+  max-height: 90vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+  overflow: hidden;
+}
+#manual-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1e2235;
+  background: #0b0e1a;
+  flex-shrink: 0;
+}
+#manual-header h2 { font-size: 0.95rem; color: #7eb8f7; margin: 0; }
+#manual-close {
+  background: transparent; border: none;
+  color: #556; font-size: 1.2rem; cursor: pointer;
+  padding: 2px 8px; border-radius: 4px;
+  line-height: 1;
+}
+#manual-close:hover { background: #1e2235; color: #c8cfe8; }
+#manual-body {
+  overflow-y: auto;
+  padding: 16px;
+  flex: 1;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #c8cfe8;
+}
+.man-section {
+  margin-bottom: 18px;
+}
+.man-section h3 {
+  font-size: 0.78rem; font-weight: 700;
+  color: #7eb8f7;
+  border-bottom: 1px solid #1e2235;
+  padding-bottom: 4px; margin: 0 0 8px 0;
+  letter-spacing: 0.03em;
+}
+.man-row {
+  display: flex; align-items: baseline; gap: 6px;
+  margin-bottom: 3px;
+}
+.man-key {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: #69f0ae;
+  background: #69f0ae11;
+  border: 1px solid #69f0ae33;
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+.man-key.warn { color: #ffcc02; background: #ffcc0211; border-color: #ffcc0233; }
+.man-key.err  { color: #f44336; background: #f4433611; border-color: #f4433633; }
+.man-key.info { color: #7eb8f7; background: #7eb8f711; border-color: #7eb8f733; }
+.man-val { color: #c8cfe8; font-size: 0.78rem; }
+.man-note {
+  font-size: 0.72rem;
+  color: #555;
+  padding: 4px 8px;
+  background: #1e2235;
+  border-radius: 4px;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.man-url-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+}
+.man-url-label { font-size: 0.7rem; color: #888; width: 80px; flex-shrink: 0; }
+.man-url-val {
+  font-size: 0.72rem; color: #7eb8f7;
+  background: #0b0e1a; border: 1px solid #2a3050;
+  border-radius: 4px; padding: 3px 7px;
+  flex: 1; word-break: break-all;
+  font-family: monospace;
+}
+.man-copy-btn {
+  flex-shrink: 0;
+  background: #2a2d3a; color: #7eb8f7;
+  border: 1px solid #3a3d4a; border-radius: 4px;
+  padding: 3px 9px; font-size: 0.7rem; cursor: pointer;
+}
+.man-copy-btn:hover { background: #3a3d4a; }
+.man-copy-btn.copied { color: #69f0ae; border-color: #69f0ae44; }
+.man-step {
+  display: flex; gap: 8px; margin-bottom: 4px;
+}
+.man-num {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  background: #7eb8f733; color: #7eb8f7;
+  border-radius: 50%; font-size: 0.68rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+.man-step-text { font-size: 0.78rem; color: #c8cfe8; }
+@media (max-width: 600px) {
+  #manual-box { max-height: 95vh; }
+  .man-url-label { width: 58px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── 상단 바 ──────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>🎛 GB16 2026 광주비엔날레 — 로봇 제어</h1>
+  <div id="mqtt-status">MQTT 연결 중...</div>
+  <button id="mqtt-cfg-btn" onclick="toggleMqttCfg()" title="MQTT 인증 설정">🔐 인증</button>
+  <button onclick="openStats()" title="전시 통계" style="font-size:0.75rem;padding:3px 8px;border:1px solid #7eb8f744;border-radius:4px;background:transparent;color:#7eb8f7;cursor:pointer;">📊 통계</button>
+  <button onclick="toggleAccessPanel()" title="접속 URL 복사" style="font-size:0.75rem;padding:3px 8px;border:1px solid #7eb8f744;border-radius:4px;background:transparent;color:#7eb8f7;cursor:pointer;">🔗 접속정보</button>
+  <button onclick="toggleManual()" title="스텝 매뉴얼" style="font-size:0.75rem;padding:3px 8px;border:1px solid #69f0ae44;border-radius:4px;background:transparent;color:#69f0ae;cursor:pointer;">📋 매뉴얼</button>
+  <a href="dashboard.html" target="_blank" rel="noopener">📊 모니터링</a>
+</div>
+<!-- ── 접속 정보 패널 ────────────────────────────────────────────────────── -->
+<div id="access-panel">
+  <div class="ap-title">🔗 접속 주소</div>
+  <div class="ap-row">
+    <span class="ap-label">외부 제어</span>
+    <span class="ap-url" id="ap-ext-ctrl">https://gb16.ngrok-free.dev/gb16_control.html</span>
+    <button class="ap-copy" onclick="apCopy('ap-ext-ctrl', this)">복사</button>
+  </div>
+  <div class="ap-row">
+    <span class="ap-label">외부 모니터</span>
+    <span class="ap-url" id="ap-ext-dash">https://gb16.ngrok-free.dev/dashboard.html</span>
+    <button class="ap-copy" onclick="apCopy('ap-ext-dash', this)">복사</button>
+  </div>
+  <div class="ap-row">
+    <span class="ap-label">내부망 제어</span>
+    <span class="ap-url" id="ap-local-ctrl">http://YOUR_GB16_IP_HERE:8182/gb16_control.html</span>
+    <button class="ap-copy" onclick="apCopy('ap-local-ctrl', this)">복사</button>
+  </div>
+  <div class="ap-row">
+    <span class="ap-label">내부망 모니터</span>
+    <span class="ap-url" id="ap-local-dash">http://YOUR_GB16_IP_HERE:8182/dashboard.html</span>
+    <button class="ap-copy" onclick="apCopy('ap-local-dash', this)">복사</button>
+  </div>
+</div>
+<!-- ── 매뉴얼 모달 ─────────────────────────────────────────────────────── -->
+<div id="manual-overlay" onclick="manualOverlayClick(event)">
+  <div id="manual-box">
+    <div id="manual-header">
+      <h2>📋 GB16 2026 광주비엔날레 — 스텝 운영 매뉴얼</h2>
+      <button id="manual-close" onclick="closeManual()">✕</button>
+    </div>
+    <div id="manual-body">
+
+      <!-- 접속 주소 -->
+      <div class="man-section">
+        <h3>🔗 제어 패널 접속 주소</h3>
+        <div class="man-url-row">
+          <span class="man-url-label">📲 외부 제어</span>
+          <span class="man-url-val" id="mu-ext-ctrl">https://gb16.ngrok-free.dev/gb16_control.html</span>
+          <button class="man-copy-btn" onclick="manCopy('mu-ext-ctrl',this)">복사</button>
+        </div>
+        <div class="man-url-row">
+          <span class="man-url-label">📲 외부 모니터</span>
+          <span class="man-url-val" id="mu-ext-dash">https://gb16.ngrok-free.dev/dashboard.html</span>
+          <button class="man-copy-btn" onclick="manCopy('mu-ext-dash',this)">복사</button>
+        </div>
+        <div class="man-url-row">
+          <span class="man-url-label">🖥 내부 제어</span>
+          <span class="man-url-val" id="mu-loc-ctrl">http://YOUR_GB16_IP_HERE:8182/gb16_control.html</span>
+          <button class="man-copy-btn" onclick="manCopy('mu-loc-ctrl',this)">복사</button>
+        </div>
+        <div class="man-url-row">
+          <span class="man-url-label">🖥 내부 모니터</span>
+          <span class="man-url-val" id="mu-loc-dash">http://YOUR_GB16_IP_HERE:8182/dashboard.html</span>
+          <button class="man-copy-btn" onclick="manCopy('mu-loc-dash',this)">복사</button>
+        </div>
+        <div class="man-note">📲 외부 주소는 어디서나 접속 가능 (모바일 데이터 포함) · 🖥 내부 주소는 전시장 Wi-Fi에 연결된 경우에만 사용</div>
+      </div>
+
+      <!-- 공연 시작 -->
+      <div class="man-section">
+        <h3>▶ 공연 시작 (관람객 입장 전)</h3>
+        <div class="man-step"><div class="man-num">1</div><div class="man-step-text">위 주소로 제어 패널 접속</div></div>
+        <div class="man-step"><div class="man-num">2</div><div class="man-step-text">상단 상태 표시줄이 <strong style="color:#69f0ae">✅ MQTT 연결됨</strong> 으로 바뀌는지 확인</div></div>
+        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">[공연 제어] 섹션 → <strong>▶ 시작</strong> 버튼 클릭 → 버튼이 초록색으로 빛나면 정상 시작</div></div>
+        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">자동 모드는 기본값 <strong>빈도 반응형</strong> 유지 (관람객이 오면 자동 작동, 1분 부재 시 자동 정지)</div></div>
+        <div class="man-note">제어 패널은 여러 명이 동시에 접속해도 됩니다.</div>
+      </div>
+
+      <!-- 공연 종료 -->
+      <div class="man-section">
+        <h3>⏹ 공연 종료 / 긴급 정지</h3>
+        <div class="man-row"><span class="man-key warn">[공연 제어] → [⏹ 전체 스톱]</span><span class="man-val">모든 로봇 즉시 정지 + 사운드 정지</span></div>
+        <div class="man-note">⚠ 제어 패널이 응답 없을 경우 → 전원 멀티탭에서 직접 OFF</div>
+      </div>
+
+      <!-- 로봇 상태 -->
+      <div class="man-section">
+        <h3>🤖 로봇 상태 카드 읽는 법</h3>
+        <div class="man-row"><span class="man-key info">IF R01–R30</span><span class="man-val">비결정적 유영 (보라 테두리</span></div>
+        <div class="man-row"><span class="man-key info">IF Ceiling R31–R34</span><span class="man-val">IF Ceiling (파랑 테두리</span></div>
+        <br>
+        <div class="man-row"><span class="man-key">IDLE</span><span class="man-val">대기 중 — 정상</span></div>
+        <div class="man-row"><span class="man-key warn">HEAT 🔥</span><span class="man-val">가열 중</span></div>
+        <div class="man-row"><span class="man-key info">SUST</span><span class="man-val">온도 유지 중</span></div>
+        <div class="man-row"><span class="man-key info">COOL ❄</span><span class="man-val">냉각 중</span></div>
+        <div class="man-row"><span class="man-key err">ERR ⚠</span><span class="man-val">오류 → 해당 전원 재시작</span></div>
+        <div class="man-row"><span class="man-key err">(흐릿한 카드)</span><span class="man-val">오프라인 (연결 끊김) → 전원 재시작</span></div>
+      </div>
+
+      <!-- 전원 제어 -->
+      <div class="man-section">
+        <h3>⚡ 전원 제어 (스마트 플러그)</h3>
+        <div class="man-note" style="margin-bottom:7px;">[전원 제어] 섹션에서 그룹별 ON · OFF · ↺ 재시작</div>
+        <div class="man-row"><span class="man-key info">1</span><span class="man-val">황금칩 꽃</span></div>
+        <div class="man-row"><span class="man-key info">2</span><span class="man-val">황금빛 꽃잎 1</span></div>
+        <div class="man-row"><span class="man-key info">3</span><span class="man-val">황금빛 꽃잎 2</span></div>
+        <div class="man-row"><span class="man-key info">4</span><span class="man-val">비결정적 유영</span></div>
+        <div class="man-row"><span class="man-key info">5</span><span class="man-val">아해들</span></div>
+        <div class="man-row"><span class="man-key info">6</span><span class="man-val">황금빛 꽃 조명</span></div>
+      </div>
+
+      <!-- 사운드 -->
+      <div class="man-section">
+        <h3>🔊 사운드 수동 제어</h3>
+        <div class="man-row"><span class="man-key info">♪ 1 ~ 4</span><span class="man-val">트랙 직접 재생</span></div>
+        <div class="man-row"><span class="man-key warn">■ STOP</span><span class="man-val">10초 페이드아웃 후 정지</span></div>
+        <div class="man-note">볼륨 슬라이더 기본값: 70</div>
+      </div>
+
+      <!-- 조명 -->
+      <div class="man-section">
+        <h3>💡 조명 긴급 제어</h3>
+        <div class="man-row"><span class="man-key err">⬛ BLACKOUT</span><span class="man-val">전체 소등 (긴급 시)</span></div>
+        <div class="man-row"><span class="man-key">↺ 자동 복귀</span><span class="man-val">정상 자동 모드로 복귀</span></div>
+      </div>
+
+      <!-- 트러블슈팅 -->
+      <div class="man-section">
+        <h3>🆘 트러블슈팅</h3>
+        <div class="man-row"><span class="man-key err">로봇 카드 흐릿함</span><span class="man-val">[전원 제어] 해당 번호 [↺] 재시작 → 30~60초 대기</span></div>
+        <div class="man-row"><span class="man-key err">ERR 상태 로봇</span><span class="man-val">[전원 제어] 해당 번호 [↺] 재시작</span></div>
+        <div class="man-row"><span class="man-key err">전체 응답 없음</span><span class="man-val">[⏹ 전체 스톱] 후 작가에게 연락</span></div>
+        <div class="man-row"><span class="man-key warn">패널 접속 불가</span><span class="man-val">Wi-Fi 또는 데이터 연결 확인 · 내부 주소 재시도</span></div>
+        <div class="man-row"><span class="man-key warn">MQTT 오류 (빨간 표시)</span><span class="man-val">페이지 새로고침 (F5 / 당겨서 새로고침)</span></div>
+        <div class="man-note">해결되지 않으면 작가에게 연락하세요.</div>
+      </div>
+
+      <!-- 긴급 연락 -->
+      <div class="man-section">
+        <h3>📞 긴급 연락</h3>
+        <div class="man-row"><span class="man-key info">작가</span><span class="man-val">김창겸 · 010-____-____</span></div>
+        <div class="man-note">잘못 눌러도 [⏹ 전체 스톱]으로 언제든 초기화 가능합니다.</div>
+      </div>
+
+    </div><!-- /manual-body -->
+  </div><!-- /manual-box -->
+</div><!-- /manual-overlay -->
+
+<!-- ── MQTT 인증 설정 패널 ──────────────────────────────────────────────── -->
+<div id="mqtt-cfg-panel">
+  <label>브로커 URL</label>
+  <input type="text" id="cfg-broker" placeholder="wss://broker:8884/mqtt  (비우면 기본값)">
+  <label>사용자명</label>
+  <input type="text" id="cfg-user" placeholder="username" autocomplete="username">
+  <label>비밀번호</label>
+  <input type="password" id="cfg-pass" placeholder="password" autocomplete="current-password">
+  <button class="cfg-apply" onclick="applyMqttCfg()">✅ 적용 &amp; 재연결</button>
+  <button class="cfg-clear" onclick="clearMqttCfg()">초기화</button>
+</div>
+
+<!-- ── 메인 ──────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- ── 좌측 제어 패널 ──────────────────────────────────────────────────── -->
+  <div id="ctrl">
+
+    <!-- 공연 제어 -->
+    <div class="ctrl-section">
+      <h3>공연 제어</h3>
+      <div class="perf-btns">
+        <button class="perf-btn perf-start" id="btn-start" onclick="startCustom()">▶ 시작</button>
+        <button class="perf-btn perf-stop active" id="btn-stop" onclick="stopCustom()">⏹ 전체 스톱</button>
+      </div>
+      <div class="mode-select-row">
+        <label>자동 모드</label>
+        <select id="auto-mode">
+          <option value="MANUAL" selected>수동 (관객 무시)</option>
+          <option value="AUTO">자동 (감지 시 재생)</option>
+          <option value="ADAPTIVE">빈도 반응형</option>
+        </select>
+      </div>
+      <div class="mode-select-row">
+        <label>대상</label>
+        <select id="auto-target">
+          <option value="ALL" selected>전체 (IF)</option>
+          <option value="IF">IF만 (13-18)</option>
+        </select>
+      </div>
+      <div class="mode-select-row">
+        <label>부재 시</label>
+        <select id="auto-absent">
+          <option value="NONE">변화 없음</option>
+          <option value="HEAT_OFF">HEAT_OFF (사운드 정지)</option>
+          <option value="FULL_STOP" selected>전체 스톱 (사운드 페이드)</option>
+          <option value="RESET">RESET</option>
+        </select>
+      </div>
+      <div class="mode-select-row">
+        <label>부재 딜레이</label>
+        <select id="absent-delay">
+          <option value="0">즉시</option>
+          <option value="30">30초</option>
+          <option value="60" selected>1분</option>
+          <option value="120">2분</option>
+          <option value="300">5분</option>
+        </select>
+      </div>
+      <div class="aud-status-bar">
+        <div class="aud-dot" id="aud-dot"></div>
+        <span class="aud-status-text" id="aud-text">관객 감지 대기...</span>
+      </div>
+      <div class="freq-bar-wrap">
+        <span class="freq-label">방문 빈도</span>
+        <div class="freq-bar"><div class="freq-fill" id="freq-fill" style="width:0%"></div></div>
+        <span class="freq-val" id="freq-val">0회</span>
+      </div>
+      <div id="aud-action-log" style="font-size:0.67rem;color:#69f0ae;margin-top:4px;min-height:1.4em;line-height:1.4;word-break:break-all"></div>
+    </div>
+
+    <!-- 그룹 선택 -->
+    <div class="ctrl-section">
+      <h3>그룹 선택</h3>
+      <div class="group-btns">
+        <button class="gbtn" onclick="selectGroup('all')">전체 34</button>
+        <button class="gbtn" onclick="selectGroup('ifa')">유영 A (1-15)</button>
+        <button class="gbtn" onclick="selectGroup('ifb')">유영 B (16-30)</button>
+        <button class="gbtn" onclick="selectGroup('ceil')">천장 (31-34)</button>
+        <button class="gbtn" onclick="selectGroup('none')">해제</button>
+      </div>
+      <div id="sel-count" style="margin-top:6px">선택: 없음</div>
+    </div>
+
+    <!-- 파라미터 -->
+    <div class="ctrl-section">
+      <h3>파라미터</h3>
+
+      <div class="param-tabs">
+        <div class="ptab active" id="tab-gp" onclick="switchParamTab('gp')">GP (Unit1·2)</div>
+        <div class="ptab" id="tab-if" onclick="switchParamTab('if')">IF</div>
+      </div>
+
+      <!-- GP 파라미터 -->
+      <div id="params-gp">
+        <div class="param-row">
+          <label>온도 목표</label>
+          <input type="range" id="gp-temp" min="20" max="60" value="38"
+            oninput="document.getElementById('gp-temp-v').textContent=this.value+'°C'">
+          <span class="param-val" id="gp-temp-v">38°C</span>
+        </div>
+        <div class="param-row">
+          <label>유지 시간</label>
+          <input type="range" id="gp-sust" min="0" max="60" value="5"
+            oninput="document.getElementById('gp-sust-v').textContent=this.value+'s'">
+          <span class="param-val" id="gp-sust-v">5s</span>
+        </div>
+        <div class="param-row">
+          <label>팬 속도</label>
+          <input type="range" id="gp-fan" min="0" max="255" value="200"
+            oninput="document.getElementById('gp-fan-v').textContent=this.value">
+          <span class="param-val" id="gp-fan-v">200</span>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="gp-loop">
+          <label for="gp-loop">루프 반복</label>
+        </div>
+      </div>
+
+      <!-- IF 파라미터 -->
+      <div id="params-if" style="display:none">
+        <div class="param-row">
+          <label>온도 목표</label>
+          <input type="range" id="if-temp" min="20" max="60" value="40"
+            oninput="document.getElementById('if-temp-v').textContent=this.value+'°C'">
+          <span class="param-val" id="if-temp-v">40°C</span>
+        </div>
+        <div class="param-row">
+          <label>유지 시간</label>
+          <input type="range" id="if-sust" min="0" max="60" value="5"
+            oninput="document.getElementById('if-sust-v').textContent=this.value+'s'">
+          <span class="param-val" id="if-sust-v">5s</span>
+        </div>
+        <div class="param-row">
+          <label>팬 속도</label>
+          <input type="range" id="if-fan" min="0" max="255" value="255"
+            oninput="document.getElementById('if-fan-v').textContent=this.value">
+          <span class="param-val" id="if-fan-v">150</span>
+        </div>
+        <div class="param-row">
+          <label>최저 온도</label>
+          <input type="range" id="if-tmin" min="0" max="30" value="0"
+            oninput="document.getElementById('if-tmin-v').textContent=this.value===0?'amb':this.value+'°C'">
+          <span class="param-val" id="if-tmin-v">amb</span>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="if-loop">
+          <label for="if-loop">루프 반복</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 명령 -->
+    <div class="ctrl-section">
+      <h3>명령</h3>
+      <div class="cmd-btns">
+        <button class="cbtn heat"   onclick="sendSelected('HEAT_ON')">🔥 HEAT_ON</button>
+        <button class="cbtn cool"   onclick="sendSelected('HEAT_OFF')">❄ HEAT_OFF</button>
+        <button class="cbtn danger" onclick="sendSelectedConfirm('RESET')">⛔ RESET</button>
+        <button class="cbtn cool"   onclick="sendSelected('FAN_ON speed='+(paramTab==='gp'?gpFanVal():ifFanVal()))">💨 FAN_ON</button>
+        <button class="cbtn"        onclick="sendSelected('FAN_OFF')">🚫 FAN_OFF</button>
+        <button class="cbtn send"   onclick="sendSet()">📋 SET 전송</button>
+        <button class="cbtn" style="background:#7b4fc8;color:#fff" onclick="staggerStart()">🎲 스태거드 시작</button>
+        <button class="cbtn" onclick="staggerStop()">⏹ 스태거드 중단</button>
+      </div>
+    </div>
+
+    <!-- 프리셋 -->
+    <div class="ctrl-section">
+      <h3>프리셋</h3>
+      <div class="preset-label">GP (Golden Petals)</div>
+      <div class="preset-grid" style="margin-bottom:8px">
+        <button class="pbtn gp" onclick="sendSelected('PRESET:1')">1</button>
+        <button class="pbtn gp" onclick="sendSelected('PRESET:2')">2</button>
+        <button class="pbtn gp" onclick="sendSelected('PRESET:3')">3</button>
+        <button class="pbtn gp" onclick="sendSelected('PRESET:4')">4</button>
+        <button class="pbtn gp" onclick="sendSelected('PRESET:5')">5</button>
+        <button class="pbtn gp" title="순차 재생" onclick="sendSelected('PRESET:6')">6🔄</button>
+        <button class="pbtn gp" title="랜덤 재생" onclick="sendSelected('PRESET:7')">7🎲</button>
+      </div>
+      <div class="preset-label">IF (Indeterministic Float)</div>
+      <div class="preset-grid">
+        <button class="pbtn if" onclick="sendSelected('PRESET:1')">1</button>
+        <button class="pbtn if" onclick="sendSelected('PRESET:2')">2</button>
+        <button class="pbtn if" onclick="sendSelected('PRESET:3')">3</button>
+        <button class="pbtn if" onclick="sendSelected('PRESET:4')">4</button>
+      </div>
+    </div>
+
+    <!-- 사운드 -->
+    <div class="ctrl-section">
+      <h3>사운드</h3>
+      <div class="loop-toggle">
+        <button class="loop-btn" id="btnLoop" onclick="setLoopMode(1)">↻ 반복</button>
+        <button class="loop-btn active" id="btnOnce" onclick="setLoopMode(0)">▷ 한번</button>
+      </div>
+      <div class="sound-btns">
+        <button class="sndbtn" onclick="sendAllSound(1)">♪ 1</button>
+        <button class="sndbtn" onclick="sendAllSound(2)">♪ 2</button>
+        <button class="sndbtn" onclick="sendAllSound(3)">♪ 3</button>
+        <button class="sndbtn" onclick="sendAllSound(4)">♪ 4</button>
+        <button class="sndbtn sndbtn-stop" onclick="sendAllSound(0)" title="10초 페이드아웃 후 정지">■ STOP</button>
+      </div>
+      <div class="vol-row">
+        <label>토탈 볼륨</label>
+        <input type="range" id="volSlider" min="1" max="100" value="70"
+               oninput="document.getElementById('volVal').textContent=this.value"
+               onchange="sendAllVolume(this.value)">
+        <span class="vol-val" id="volVal">70</span>
+      </div>
+    </div>
+
+    <!-- 전원 제어 -->
+    <div class="ctrl-section">
+      <h3>⚡ 전원 제어</h3>
+      <div class="pwr-grid">
+        <div class="pwr-row">
+          <span class="pwr-id">1</span><span class="pwr-name">황금칩 꽃</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on"  onclick="sendPower(1,'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(1,'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(1,'reset')">↺</button>
+          </div>
+        </div>
+        <div class="pwr-row">
+          <span class="pwr-id">2</span><span class="pwr-name">황금빛 꽃잎 1</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on"  onclick="sendPower(2,'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(2,'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(2,'reset')">↺</button>
+          </div>
+        </div>
+        <div class="pwr-row">
+          <span class="pwr-id">3</span><span class="pwr-name">황금빛 꽃잎 2</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on"  onclick="sendPower(3,'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(3,'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(3,'reset')">↺</button>
+          </div>
+        </div>
+        <div class="pwr-row">
+          <span class="pwr-id">4</span><span class="pwr-name">비결정적 유영</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on"  onclick="sendPower(4,'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(4,'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(4,'reset')">↺</button>
+          </div>
+        </div>
+        <div class="pwr-row">
+          <span class="pwr-id">5</span><span class="pwr-name">아해들</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on"  onclick="sendPower(5,'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(5,'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(5,'reset')">↺</button>
+          </div>
+        </div>
+        <div class="pwr-row">
+          <span class="pwr-id">6</span><span class="pwr-name">황금빛 꽃 조명</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on"  onclick="sendPower(6,'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(6,'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(6,'reset')">↺</button>
+          </div>
+        </div>
+      </div>
+      <div id="pwr-log"></div>
+    </div>
+
+    <!-- 명령 로그 -->
+    <div class="ctrl-section" style="flex:1">
+      <h3>명령 로그</h3>
+      <div id="cmd-log">대기 중...</div>
+    </div>
+
+  </div><!-- /ctrl -->
+
+  <!-- ── 우측 로봇 그리드 ─────────────────────────────────────────────────── -->
+  <div id="grid-area">
+    <div id="grid-scroll">
+      <div class="grid-label"><span>비결정적 유영 A  (R01 – R15)</span><label class="ar-cb" id="ar-label-ifa"><input type="checkbox" id="ar-ifa" onchange="toggleAutoReset('ifa',this)"> 자동리셋</label></div>
+      <div class="robot-grid" id="grid-gf"></div>
+      <div class="robot-grid" id="grid-ifa"></div>
+      <div class="grid-label"><span>비결정적 유영 B  (R16 – R30)</span><label class="ar-cb" id="ar-label-ifb"><input type="checkbox" id="ar-ifb" onchange="toggleAutoReset('ifb',this)"> 자동리셋</label></div>
+      <div class="robot-grid" id="grid-ifb"></div>
+      <div class="grid-label"><span>IF Ceiling  (R31 – R34)</span><label class="ar-cb" id="ar-label-ceil"><input type="checkbox" id="ar-ceil" onchange="toggleAutoReset('ceil',this)"> 자동리셋</label></div>
+      <div class="robot-grid" id="grid-ceil"></div>
+    </div>
+    <!-- ── 카메라 모니터 ──────────────────────────────────────────────────── -->
+    <div id="cam-area">
+      <div class="cam-box">
+        <div class="cam-label">CAM 1 · 192.168.50.200</div>
+        <img id="cam-stream-1" src="" class="cam-img" alt="cam1">
+      </div>
+      <div class="cam-box">
+        <div class="cam-label">CAM 2 · 192.168.50.201</div>
+        <img id="cam-stream-2" src="" class="cam-img" alt="cam2">
+      </div>
+      <div class="cam-side-info">
+        <div class="cam-badge" id="cam-aud-badge">○ ABSENT</div>
+        <div style="font-size:0.68rem;color:#555;margin-top:2px">HTTP 포트</div>
+        <div class="cam-port-row">
+          <input id="cam-port" type="number" value="8181" min="1024" max="65535">
+          <button onclick="applyCamPort()">적용</button>
+        </div>
+        <div style="font-size:0.63rem;color:#444;margin-top:2px">로컬: MJPEG 스트림</div>
+      </div>
+
+      <!-- ── 조명 제어 패널 (LIGHT_ENABLED=false 시 숨김) ──────────────── -->
+      <div class="cam-light-panel" id="cam-light-panel" style="display:none">
+        <div class="lp-header">
+          <span class="lp-title">💡 조명 제어</span>
+          <button class="lp-gui-btn" onclick="launchLightGui()">🖥 테스트 GUI</button>
+        </div>
+        <div class="lp-selects">
+          <select id="light-mode" onchange="sendLightMode(this.value)">
+            <option value="AUTO" selected>자동</option>
+            <option value="MANUAL">수동</option>
+          </select>
+          <select id="light-scene" onchange="sendLightScene(this.value)">
+            <option value="AUTO" selected>시간 자동</option>
+            <option value="DAY">낮 (×0.7)</option>
+            <option value="NIGHT">밤 (×1.0)</option>
+          </select>
+        </div>
+        <div class="lp-brightness">
+          <span>밝기</span>
+          <input type="range" id="light-brightness" min="0" max="100" value="100"
+            oninput="document.getElementById('light-bv').textContent=this.value+'%';sendLightBrightness(this.value)">
+          <span id="light-bv">100%</span>
+        </div>
+        <div class="lp-btns">
+          <button class="lp-blackout" style="grid-column:span 2" onclick="sendLightCmd('BLACKOUT')">⬛ BLACKOUT</button>
+          <button style="grid-column:span 2" onclick="sendLightCmd('CLEAR');sendLightCmd('MODE:AUTO')">↺ 자동 복귀</button>
+          <button onclick="sendLightGroup('gp_flower','255,148,0,130')">🌸 꽃만개</button>
+          <button onclick="sendLightGroup('gp_flower','45,18,0,35')">🌙 꽃대기</button>
+          <button onclick="sendLightGroup('if','18,170,230,75')">🌊 유영최대</button>
+          <button onclick="sendLightGroup('if','0,35,70,18')">💤 유영대기</button>
+          <button onclick="sendLightGroup('children','95,72,22,185')">☀ 아해들밝음</button>
+          <button onclick="sendLightGroup('children','18,13,5,55')">🌒 아해들어둠</button>
+        </div>
+        <div class="lp-rgbw" id="light-status-grid"></div>
+        <div class="lp-log" id="light-log"></div>
+      </div>
+
+      <!-- ── 10분 구동 데모 패널 ────────────────────────────────────── -->
+      <div class="demo-panel">
+        <!-- 탭 -->
+        <div class="demo-tabs">
+          <button class="demo-tab dt-active" onclick="showDemoTab('preset')">🎬 프리셋 데모</button>
+          <button class="demo-tab" onclick="showDemoTab('custom')">✏️ 커스텀 타임라인</button>
+        </div>
+
+        <!-- 프리셋 데모 탭 -->
+        <div id="demo-tab-preset">
+          <div class="demo-header">
+            <span class="demo-title">🎬 10분 구동 데모</span>
+            <span id="demo-timer" class="demo-timer">10:00</span>
+          </div>
+          <div class="demo-progress-bar">
+            <div id="demo-progress" class="demo-progress-fill"></div>
+          </div>
+          <div class="demo-btns">
+            <button id="demo-start-btn" class="demo-start" onclick="startDemo()">▶ 시작</button>
+            <button id="demo-stop-btn" class="demo-stop"  onclick="stopDemo()" disabled>⏹ 중단</button>
+          </div>
+          <div id="demo-log" class="demo-log">대기 중...</div>
+        </div>
+
+        <!-- 커스텀 타임라인 탭 -->
+        <div id="demo-tab-custom" style="display:none">
+          <div id="custom-steps" class="cs-list"></div>
+          <div class="cs-add-row">
+            <button class="cs-add-btn" onclick="addCustomStep()">＋ 스텝 추가</button>
+            <button class="cs-sort-btn" onclick="sortCustomSteps()">↕ 시간순 정렬</button>
+            <span class="cs-duration-lbl">총 <b id="custom-duration">0:00</b></span>
+          </div>
+          <div class="demo-progress-bar" style="margin-top:6px">
+            <div id="custom-progress" class="demo-progress-fill" style="background:linear-gradient(90deg,#6a3af0,#c87fff)"></div>
+          </div>
+          <div class="demo-btns" style="margin-top:6px">
+            <button id="custom-start-btn" class="demo-start" onclick="startCustom()">▶ 실행</button>
+            <button id="custom-stop-btn" class="demo-stop" onclick="stopCustom()" disabled>⏹ 중단</button>
+            <span id="custom-timer" class="demo-timer" style="padding:0 6px;font-size:0.88rem">--:--</span>
+          </div>
+          <div id="custom-log" class="demo-log">대기 중...</div>
+        </div>
+
+        <!-- ── Pd 큐 설정 (공통) ──────────────────────────────────── -->
+        <div class="pd-cue-bar">
+          <button class="pd-cue-toggle" onclick="togglePdCue()" title="Pure Data 컴퓨터로 큐 전송 설정">📡 Pd 큐</button>
+          <span id="pd-cue-status" class="pd-cue-status"></span>
+          <div id="pd-cue-cfg" class="pd-cue-cfg" style="display:none">
+            <input id="pd-ip"   class="pd-inp" type="text"   placeholder="IP  (예: 192.168.50.100)" title="Pd 컴퓨터 IP">
+            <input id="pd-port" class="pd-inp pd-inp-sm" type="text" placeholder="포트 (예: 3000)" title="UDP 포트">
+            <input id="pd-val"  class="pd-inp pd-inp-xs" type="number" min="0" max="255" value="1" placeholder="값" title="전송할 1바이트 값 (0-255)">
+            <button class="pd-save-btn" onclick="savePdCue()">저장</button>
+            <button class="pd-test-btn" onclick="testPdCue()">테스트</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 공연 일정 패널 ──────────────────────────────────────────── -->
+      <div class="schedule-panel">
+        <div class="schedule-header">
+          <span class="schedule-title">📅 공연 일정</span>
+          <label class="sched-auto-toggle" title="예약 시간에 자동으로 커스텀 타임라인 실행">
+            <input type="checkbox" id="sched-auto-chk"> 자동 시작
+          </label>
+        </div>
+        <div class="sched-countdown-wrap">
+          <div class="sched-next-label">다음 공연까지</div>
+          <div id="sched-next-time" class="sched-next-time">--</div>
+          <div id="sched-countdown" class="sched-countdown">--:--:--</div>
+        </div>
+        <div class="sched-section-title">오늘 공연</div>
+        <div id="sched-today-list" class="sched-time-list"></div>
+        <div class="sched-section-title">이번 주 일정</div>
+        <div id="sched-week-table"></div>
+      </div>
+
+      <!-- ── 오류 로그 패널 ─────────────────────────────────────────── -->
+      <div class="cam-error-panel">
+        <div class="ep-header">
+          <span class="ep-title">⚠ 오류 로그</span>
+          <div style="display:flex;gap:4px;">
+            <button class="ep-clear-btn" onclick="openFullErrorLog()" title="새 창에서 전체 보기">전체보기</button>
+            <button class="ep-clear-btn" onclick="clearErrorLog()">지우기</button>
+          </div>
+        </div>
+        <div id="error-log" onclick="openFullErrorLog()" title="클릭하면 새 창에서 전체 로그를 확인합니다"><span style="color:#444">오류 없음</span></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  설정
+// ═══════════════════════════════════════════════════════════════════════════
+const BROKER     = 'ws://YOUR_GB16_IP_HERE:9001/mqtt';
+const BROKER_ALT = 'ws://localhost:9001/mqtt';
+const BROKER_EXT = 'wss://k890ff91.ala.asia-southeast1.emqxsl.com:8084/mqtt';  // 외부 접속용 (ngrok 경유)
+
+// ── MQTT 인증 (localStorage 저장 — 페이지 새로고침 후에도 유지) ─────────
+let mqttBrokerOverride = localStorage.getItem('mqttBroker') || '';
+let mqttUser           = localStorage.getItem('mqttUser')   || 'gb16_host';
+let mqttPass           = localStorage.getItem('mqttPass')   || 'som123';
+
+function toggleAccessPanel() {
+  const p = document.getElementById('access-panel');
+  const visible = p.style.display === 'flex';
+  p.style.display = visible ? 'none' : 'flex';
+  if (!visible) document.getElementById('mqtt-cfg-panel').style.display = 'none';
+}
+function toggleManual() {
+  document.getElementById('manual-overlay').classList.toggle('open');
+}
+function closeManual() {
+  document.getElementById('manual-overlay').classList.remove('open');
+}
+function manualOverlayClick(e) {
+  if (e.target === document.getElementById('manual-overlay')) closeManual();
+}
+function manCopy(id, btn) {
+  const text = document.getElementById(id).textContent.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ 복사됨'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1800);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✓ 복사됨'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+function apCopy(id, btn) {
+  const text = document.getElementById(id).textContent.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ 복사됨';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1800);
+  }).catch(() => {
+    // clipboard API 불가 시 fallback
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✓ 복사됨'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+function toggleMqttCfg() {
+  const p = document.getElementById('mqtt-cfg-panel');
+  const visible = p.style.display !== 'none' && p.style.display !== '';
+  p.style.display = visible ? 'none' : 'flex';
+  if (!visible) document.getElementById('access-panel').style.display = 'none';
+  if (!visible) {
+    document.getElementById('cfg-broker').value = mqttBrokerOverride;
+    document.getElementById('cfg-user').value   = mqttUser;
+    document.getElementById('cfg-pass').value   = mqttPass;
+  }
+}
+
+function applyMqttCfg() {
+  mqttBrokerOverride = document.getElementById('cfg-broker').value.trim();
+  mqttUser           = document.getElementById('cfg-user').value;
+  mqttPass           = document.getElementById('cfg-pass').value;
+  localStorage.setItem('mqttBroker', mqttBrokerOverride);
+  localStorage.setItem('mqttUser',   mqttUser);
+  localStorage.setItem('mqttPass',   mqttPass);
+  document.getElementById('mqtt-cfg-panel').style.display = 'none';
+  if (mqttClient) { mqttClient.end(true); mqttClient = null; }
+  connectMqtt(false);
+}
+
+function clearMqttCfg() {
+  ['mqttBroker','mqttUser','mqttPass'].forEach(k => localStorage.removeItem(k));
+  mqttBrokerOverride = mqttUser = mqttPass = '';
+  ['cfg-broker','cfg-user','cfg-pass'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+}
+const IF_IDS_A   = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];  // 비결정적 유영 A
+const IF_IDS_B   = [16,17,18,19,20,21,22,23,24,25,26,27,28,29,30];  // 비결정적 유영 B
+const IF_CEIL    = [31,32,33,34];    // IF Ceiling
+const GP_IDS     = [];                    // 미사용
+const IF_IDS     = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34];    // 전체 IF
+const ALL_IDS    = IF_IDS;
+const OFFLINE_TIMEOUT = 15000;  // ms
+
+// ── 자동 전원리셋 ────────────────────────────────────────────────────────────
+// 작품 그룹별 Tapo 전원 그룹 매핑
+const GROUP_ROBOT_IDS = { ifa: IF_IDS_A, ifb: IF_IDS_B, if: IF_IDS, ceil: IF_CEIL };
+const GROUP_TAPO      = { gf: 1, gp1: 2, gp2: 3, if: 4 };
+const AUTO_ERR_MS     = 30_000;           // 에러 지속 임계 (30s)
+const AUTO_RESET_COOLDOWN_MS = 120_000;   // 자동리셋 후 재발동 방지 (2min)
+const autoResetEnabled = { gf: false, gp1: false, gp2: false, if: false };
+const errorSince       = {};  // robotId → timestamp (에러 최초 감지 시각)
+const faultClearAt     = {};  // robotId → timestamp (fault=0 감지 시각, 15s 후 clears errorSince)
+const FAULT_CLEAR_DELAY_MS = 15_000;  // brief recovery 무시 — 15초 지속 정상만 클리어
+const lastAutoReset    = {};  // groupKey → timestamp (마지막 자동리셋 시각)
+
+function toggleAutoReset(group, cb) {
+  autoResetEnabled[group] = cb.checked;
+  const label = document.getElementById(`ar-label-${group}`);
+  if (label) label.classList.toggle('active', cb.checked);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  공연 제어 상태
+// ═══════════════════════════════════════════════════════════════════════════
+let systemRunning    = false;
+let audienceNow      = false;
+let visitHistory     = [];       // 방문 시작 타임스탬프 (10분 롤링 윈도우)
+const VISIT_WINDOW   = 10 * 60 * 1000;
+let _absentTimer     = null;     // 부재 시 딜레이 타이머
+
+let soundLoopMode = 0;  // 0=한번, 1=반복
+
+function setLoopMode(mode) {
+  soundLoopMode = mode;
+  document.getElementById('btnLoop').classList.toggle('active', mode === 1);
+  document.getElementById('btnOnce').classList.toggle('active', mode === 0);
+}
+
+function sendAllSound(snd) {
+  if (snd === 0) {
+    // STOP: 루프 무관, 구버전 포맷 유지
+    ALL_IDS.forEach(id => publish(id, 'SOUND:0'));
+    logCmd('✅ 전체(' + ALL_IDS.length + '대) → SOUND:0 (STOP)');
+  } else if (soundLoopMode === 0) {
+    // 한번: 루프 없음 — 구버전 sema_host.py와 호환되는 'SOUND:n' 포맷
+    ALL_IDS.forEach(id => publish(id, 'SOUND:' + snd));
+    logCmd('✅ 전체(' + ALL_IDS.length + '대) → SOUND:' + snd + ' [한번]');
+  } else {
+    // 반복: 'SOUND:n:1' 포맷 — sema_host.py 재시작 필요
+    ALL_IDS.forEach(id => publish(id, 'SOUND:' + snd + ':1'));
+    logCmd('✅ 전체(' + ALL_IDS.length + '대) → SOUND:' + snd + ' [반복]');
+  }
+}
+
+function sendAllVolume(vol) {
+  const v = Math.round(vol);
+  ALL_IDS.forEach(id => publish(id, 'VOLUME:' + v));
+  logCmd('🔊 전체(' + ALL_IDS.length + '대) → VOLUME:' + v);
+}
+
+function _startSound() {
+  // 트랙1 루프 재생 — 전체 로봇에 전송
+  ALL_IDS.forEach(id => publish(id, 'SOUND:1:1'));
+}
+
+function _stopSound() {
+  // SOUND:0 = 오디오실드 정지 — 전체 로봇에 전송
+  ALL_IDS.forEach(id => publish(id, 'SOUND:0'));
+}
+
+function _sendStartCmds() {
+  const mode    = document.getElementById('auto-mode').value;
+  const targets = getAutoTargetIds();
+  const gpTgts  = targets.filter(id => GP_IDS.includes(id));
+  const ifTgts  = targets.filter(id => IF_IDS.includes(id));
+  if (mode === 'AUTO') {
+    ifTgts.forEach(id => publish(id, 'RESET'));
+    gpTgts.forEach(id => publish(id, 'PRESET:7'));
+    ifTgts.forEach(id => publish(id, 'PRESET:4'));
+  } else if (mode === 'ADAPTIVE') {
+    const ap = getAdaptivePreset();
+    ifTgts.forEach(id => publish(id, 'RESET'));
+    gpTgts.forEach(id => publish(id, `PRESET:${ap.gp}`));
+    ifTgts.forEach(id => publish(id, `PRESET:${ap.if}`));
+  }
+}
+
+function startPerformance() {
+  systemRunning = true;
+  document.getElementById('btn-start').classList.add('active');
+  document.getElementById('btn-stop').classList.remove('active');
+
+  // 조명 페이드아웃 취소 + 밝기 복구 (LIGHT_ENABLED=false 시 스킵)
+  if (LIGHT_ENABLED) {
+    if (_lightFadeTimer !== null) {
+      clearInterval(_lightFadeTimer);
+      _lightFadeTimer = null;
+    }
+    const _lSlider = document.getElementById('light-brightness');
+    const _lBvEl   = document.getElementById('light-bv');
+    if (_lSlider && parseInt(_lSlider.value) === 0) {
+      _lSlider.value = 100;
+      if (_lBvEl) _lBvEl.textContent = '100%';
+      sendLightCmd('BRIGHTNESS:1.00');
+      logCmd('💡 조명 밝기 복구 (1.00)');
+    }
+  }
+
+  const mode = document.getElementById('auto-mode').value;
+  if (mode !== 'MANUAL') {
+    // 1차 전송
+    _sendStartCmds();
+    logAudAction('▶ 시작 — 명령 전송 (2초 후 자동 재전송)');
+    // 2차 재전송 (미수신 로봇 구제)
+    setTimeout(() => { if (systemRunning) { _sendStartCmds(); logCmd('↺ [재전송] 시작 명령 재전송'); } }, 2000);
+    // 사운드 시작 (SOUND:1:1 = 트랙1 루프)
+    _startSound();
+    logAudAction('▶ 시작 — SOUND:1:1 (오디오실드 루프)');
+  } else {
+    logAudAction('▶ 시작 — 수동 모드 (로봇·사운드 자동전송 없음)');
+  }
+}
+
+function stopPerformance() {
+  systemRunning = false;
+  _stopSound();
+  _fadeLights();
+  document.getElementById('btn-start').classList.remove('active');
+  document.getElementById('btn-stop').classList.add('active');
+  const mode = document.getElementById('auto-mode').value;
+  if (mode !== 'MANUAL') {
+    publish('all', 'RESET');
+    logAudAction('⏹ 전체 스톱 — RESET(all) + SOUND:0 + 조명 페이드');
+    // 1초·2초 후 재전송 (미수신 로봇 구제)
+    setTimeout(() => { if (!systemRunning) { publish('all', 'RESET'); logCmd('↺ [재전송] RESET(all) 1차'); } }, 1000);
+    setTimeout(() => { if (!systemRunning) { publish('all', 'RESET'); logCmd('↺ [재전송] RESET(all) 2차'); } }, 2000);
+  } else {
+    logAudAction('⏹ 전체 스톱 — SOUND:0 + 조명 페이드');
+  }
+}
+
+function getAutoTargetIds() {
+  const t = document.getElementById('auto-target').value;
+  if (t === 'GP') return [...GP_IDS];
+  if (t === 'IF') return [...IF_IDS];
+  return [...ALL_IDS];
+}
+
+function getRecentVisits() {
+  const now = Date.now();
+  visitHistory = visitHistory.filter(t => now - t < VISIT_WINDOW);
+  return visitHistory.length;
+}
+
+function getAdaptivePreset() {
+  const v = getRecentVisits();
+  if (v <= 1) return { gp: 3, if: 3, level: '낮음' };   // 느린 유영
+  if (v <= 4) return { gp: 2, if: 2, level: '보통' };   // 유영
+  return       { gp: 5, if: 4, level: '높음' };          // 활발한/힘찬
+}
+
+function updateFreqBar() {
+  const v   = getRecentVisits();
+  const pct = Math.min(v / 8 * 100, 100);
+  const fill = document.getElementById('freq-fill');
+  const val  = document.getElementById('freq-val');
+  if (fill) {
+    fill.style.width      = pct + '%';
+    fill.style.background = v <= 1 ? '#4fc3f7' : v <= 4 ? '#69f0ae' : '#ff9860';
+  }
+  if (val) val.textContent = v + '회';
+}
+
+function handleAudience(present) {
+  const wasPresent = audienceNow;
+  audienceNow = present;
+
+  // UI 업데이트
+  const dot   = document.getElementById('aud-dot');
+  const txt   = document.getElementById('aud-text');
+  const img1  = document.getElementById('cam-stream-1');
+  const img2  = document.getElementById('cam-stream-2');
+  const badge = document.getElementById('cam-aud-badge');
+  if (dot)   dot.classList.toggle('present', present);
+  if (txt)   txt.textContent = present ? '● 관객 감지됨' : '○ 관객 없음';
+  if (img1)  img1.classList.toggle('present', present);
+  if (img2)  img2.classList.toggle('present', present);
+  if (badge) {
+    badge.textContent = present ? '● PRESENT' : '○ ABSENT';
+    badge.classList.toggle('present', present);
+  }
+
+  // 관객 감지 자동시작/자동정지 비활성화
+}
+
+function logAudAction(msg) {
+  const el = document.getElementById('aud-action-log');
+  const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  if (el) el.textContent = `[${ts}] ${msg}`;
+  logCmd(msg);
+}
+
+// ── 카메라 스트림 ──────────────────────────────────────────────────────────
+function isLocal() {
+  const h = window.location.hostname;
+  return h === '' || h === 'localhost' || h === '127.0.0.1' || /^192\.168\./.test(h) || /^10\./.test(h);
+}
+function localHost() {
+  const h = window.location.hostname;
+  return (h === '') ? 'localhost' : h;  // file:// → localhost
+}
+let _snapTimers = {};
+function stopSnapPolling() { Object.values(_snapTimers).forEach(clearTimeout); _snapTimers = {}; }
+function startSnapPolling(host) {
+  stopSnapPolling();
+  [['cam-stream-1','snapshot1'],['cam-stream-2','snapshot2']].forEach(([id, ep]) => {
+    const img = document.getElementById(id);
+    function refresh() {
+      const ni = new Image();
+      ni.onload  = () => { img.src = ni.src; _snapTimers[id] = setTimeout(refresh, 200); };
+      ni.onerror = () => { _snapTimers[id] = setTimeout(refresh, 1000); };
+      ni.src = `https://${host}/${ep}.jpeg?t=${Date.now()}`;
+    }
+    refresh();
+  });
+}
+function applyCamPort() {
+  const port = parseInt(document.getElementById('cam-port').value) || 8181;
+  const host = localHost();
+  if (isLocal()) {
+    // 로컈: MJPEG 스트림 직접 사용 (실패 시 5초마다 자동 재시도)
+    stopSnapPolling();
+    function loadMjpeg(imgId, ep) {
+      const img = document.getElementById(imgId);
+      img.onerror = () => { _snapTimers[imgId] = setTimeout(() => loadMjpeg(imgId, ep), 5000); };
+      img.src = `http://${host}:${port}/${ep}?t=${Date.now()}`;
+    }
+    loadMjpeg('cam-stream-1', 'stream1.mjpeg');
+    loadMjpeg('cam-stream-2', 'stream2.mjpeg');
+  } else {
+    startSnapPolling(host);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  상태 저장
+// ═══════════════════════════════════════════════════════════════════════════
+const robots = {};
+ALL_IDS.forEach(id => {
+  robots[id] = {
+    id, state: '--', state2: '--',
+    s1: null, s2: null, amb: null,
+    fault: 0, code: 0, mode: 0, preset: 0,
+    lastSeen: null,
+  };
+});
+
+const selected = new Set();
+let mqttClient = null;
+let usingAlt   = false;
+let paramTab   = 'gp';
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  파라미터 탭 전환
+// ═══════════════════════════════════════════════════════════════════════════
+function switchParamTab(tab) {
+  paramTab = tab;
+  document.getElementById('params-gp').style.display = tab === 'gp' ? '' : 'none';
+  document.getElementById('params-if').style.display = tab === 'if' ? '' : 'none';
+  document.getElementById('tab-gp').classList.toggle('active', tab === 'gp');
+  document.getElementById('tab-if').classList.toggle('active', tab === 'if');
+  // 파라미터 탭과 auto-target 동기화 (selected 없을 때 타깃 그룹을 맞춤)
+  const tgt = document.getElementById('auto-target');
+  if (tgt) tgt.value = tab === 'gp' ? 'GP' : 'IF';
+}
+
+function gpFanVal()  { return document.getElementById('gp-fan').value; }
+function ifFanVal()  { return document.getElementById('if-fan').value; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  그룹 선택
+// ═══════════════════════════════════════════════════════════════════════════
+function selectGroup(group) {
+  selected.clear();
+  if      (group === 'all')  ALL_IDS.forEach(id => selected.add(id));
+  else if (group === 'gf')   GF_IDS.forEach(id => selected.add(id));
+  else if (group === 'gp1')  GP1_IDS.forEach(id => selected.add(id));
+  else if (group === 'gp2')  GP2_IDS.forEach(id => selected.add(id));
+  else if (group === 'gp')   GP_IDS.forEach(id => selected.add(id));
+  else if (group === 'if')   IF_IDS.forEach(id => selected.add(id));
+  updateSelCount();
+  renderAll();
+}
+
+function toggleSelect(id) {
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  updateSelCount();
+  const card = document.getElementById(`card-${id}`);
+  if (card) card.classList.toggle('selected', selected.has(id));
+}
+
+function updateSelCount() {
+  const gfSel  = GF_IDS.filter(id => selected.has(id));
+  const gp1Sel = GP1_IDS.filter(id => selected.has(id));
+  const gp2Sel = GP2_IDS.filter(id => selected.has(id));
+  const ifSel  = IF_IDS.filter(id => selected.has(id));
+  const parts = [];
+  if (gfSel.length)  parts.push(`꽃 ${gfSel.length}대`);
+  if (gp1Sel.length) parts.push(`꽃잎1 ${gp1Sel.length}대`);
+  if (gp2Sel.length) parts.push(`꽃잎2 ${gp2Sel.length}대`);
+  if (ifSel.length)  parts.push(`비결정 ${ifSel.length}대`);
+  document.getElementById('sel-count').textContent =
+    parts.length ? `선택: ${parts.join(', ')} (총 ${selected.size}대)` : '선택: 없음';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  명령 전송
+// ═══════════════════════════════════════════════════════════════════════════
+function publish(rid, cmd) {
+  if (!mqttClient || !mqttClient.connected) {
+    logCmd('⚠ MQTT 미연결');
+    return false;
+  }
+  mqttClient.publish(`gb16/robot/${rid}/cmd`, cmd, { qos: 1 });
+  return true;
+}
+
+// 선택 없으면 auto-target 그룹을 기본 대상으로 사용
+function resolveTargets() {
+  return selected.size > 0
+    ? [...selected].sort((a, b) => a - b)
+    : getAutoTargetIds();
+}
+
+function sendSelected(cmd) {
+  const targets = resolveTargets();
+  if (targets.length === 0) { logCmd('⚠ 대상 없음'); return; }
+  let ok = 0;
+  targets.forEach(rid => { if (publish(rid, cmd)) ok++; });
+  const lbl = selected.size > 0 ? `R[${targets.join(',')}]` : `${document.getElementById('auto-target').value} 전체(${targets.length}대)`;
+  logCmd(`✅ ${lbl} → ${cmd}  (${ok}대)`);
+}
+
+function sendSelectedConfirm(cmd) {
+  const targets = resolveTargets();
+  if (targets.length === 0) { logCmd('⚠ 대상 없음'); return; }
+  if (!confirm(`${targets.length}대 로봇에 ${cmd} 명령을 보내시겠습니까?`)) return;
+  sendSelected(cmd);
+}
+
+function sendSet() {
+  const targets = resolveTargets();
+  if (targets.length === 0) { logCmd('⚠ 대상 없음'); return; }
+  const gpTargets = targets.filter(id => GP_IDS.includes(id));
+  const ifTargets = targets.filter(id => IF_IDS.includes(id));
+  let lines = [];
+
+  if (gpTargets.length) {
+    const t   = document.getElementById('gp-temp').value;
+    const s   = document.getElementById('gp-sust').value;
+    const f   = document.getElementById('gp-fan').value;
+    const lp  = document.getElementById('gp-loop').checked ? 1 : 0;
+    const cmd = `SET temp1=${t} sust1=${s} fan1=${f} temp2=${t} sust2=${s} fan2=${f} loop=${lp}`;
+    gpTargets.forEach(rid => publish(rid, cmd));
+    lines.push(`✅ GP R[${gpTargets.join(',')}] → ${cmd}`);
+  }
+  if (ifTargets.length) {
+    const t   = document.getElementById('if-temp').value;
+    const s   = document.getElementById('if-sust').value;
+    const f   = document.getElementById('if-fan').value;
+    const tm  = document.getElementById('if-tmin').value;
+    const lp  = document.getElementById('if-loop').checked ? 1 : 0;
+    const cmd = `SET temp=${t} sust=${s} fan=${f} tmin=${tm} loop=${lp}`;
+    ifTargets.forEach(rid => publish(rid, cmd));
+    lines.push(`✅ IF R[${ifTargets.join(',')}] → ${cmd}`);
+  }
+  logCmd(lines.join('\n'));
+}
+
+function logCmd(msg) {
+  const el = document.getElementById('cmd-log');
+  const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  el.textContent = `[${ts}]\n${msg}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  10분 구동 데모
+// ══════════════════════════════════════════════════════════════════
+let _demoTimers  = [];
+let _demoRunning = false;
+let _demoTickId  = null;
+let _demoStartMs = 0;
+const DEMO_DURATION_S = 600;
+
+const DEMO_STEPS = [
+  { t:   0, label: '🎬 시작 — 전체 정지·소등', fn: () => {
+      ALL_IDS.forEach(id => publish(id, 'PRESET:1'));
+      sendLightCmd('BLACKOUT'); sendLightCmd('MODE:MANUAL');
+  }},
+  { t:  10, label: '💡 꽃 대기 조명 (20%)', fn: () => {
+      LIGHT_GROUPS.gp_flower.forEach(id => sendLightCmd(`SET:${id}:45,18,0,35`));
+      LIGHT_GROUPS.gp_petal.forEach(id  => sendLightCmd(`SET:${id}:20,8,0,15`));
+      sendLightCmd('BRIGHTNESS:20');
+  }},
+  { t:  30, label: '🌊 느린 유영 시작 (GP P3 · IF P3)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:3'));
+      IF_IDS.forEach(id => publish(id, 'PRESET:3'));
+  }},
+  { t:  55, label: '💡 조명 40%', fn: () => { sendLightCmd('BRIGHTNESS:40'); }},
+  { t:  75, label: '💡 꽃 만개 조명', fn: () => {
+      LIGHT_GROUPS.gp_flower.forEach(id => sendLightCmd(`SET:${id}:255,148,0,130`));
+      sendLightCmd('BRIGHTNESS:50');
+  }},
+  { t:  90, label: '🌊 유영 (GP P2 · IF P2)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:2'));
+      IF_IDS.forEach(id => publish(id, 'PRESET:2'));
+  }},
+  { t: 120, label: '💡 조명 65%', fn: () => { sendLightCmd('BRIGHTNESS:65'); }},
+  { t: 150, label: '🌊 교번유영 / 힘찬유영 (GP P4 · IF P4)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:4'));
+      IF_IDS.forEach(id => publish(id, 'PRESET:4'));
+  }},
+  { t: 180, label: '💡 아해들 조명 켜기 + 80%', fn: () => {
+      LIGHT_GROUPS.children.forEach(id => sendLightCmd(`SET:${id}:95,72,22,185`));
+      sendLightCmd('BRIGHTNESS:80');
+  }},
+  { t: 210, label: '💡 유영 조명 켜기', fn: () => {
+      LIGHT_GROUPS.if.forEach(id => sendLightCmd(`SET:${id}:18,170,230,75`));
+  }},
+  { t: 240, label: '🌊 활발한유영 / 숨고르기 (GP P5 · IF P5)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:5'));
+      IF_IDS.forEach(id => publish(id, 'PRESET:5'));
+  }},
+  { t: 275, label: '💡 최대 밝기 100%', fn: () => { sendLightCmd('BRIGHTNESS:100'); }},
+  { t: 300, label: '🎲 GP 랜덤 재생 (P7)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:7'));
+  }},
+  { t: 330, label: '🎲 IF 랜덤 재생 (P7) — 절정', fn: () => {
+      IF_IDS.forEach(id => publish(id, 'PRESET:7'));
+  }},
+  { t: 360, label: '🔄 GP·IF 순차 재생 (P6)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:6'));
+      IF_IDS.forEach(id => publish(id, 'PRESET:6'));
+  }},
+  { t: 420, label: '💡 조명 80% — 하강 시작', fn: () => { sendLightCmd('BRIGHTNESS:80'); }},
+  { t: 450, label: '🌊 교번유영 / 힘찬유영 (GP P4 · IF P4)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:4'));
+      IF_IDS.forEach(id => publish(id, 'PRESET:4'));
+  }},
+  { t: 480, label: '💡 조명 55%', fn: () => { sendLightCmd('BRIGHTNESS:55'); }},
+  { t: 510, label: '🌊 느린 유영 — 마무리 (GP P3 · IF P3)', fn: () => {
+      GP_IDS.forEach(id => publish(id, 'PRESET:3'));
+      IF_IDS.forEach(id => publish(id, 'PRESET:3'));
+  }},
+  { t: 535, label: '💡 조명 35%', fn: () => { sendLightCmd('BRIGHTNESS:35'); }},
+  { t: 555, label: '⏸ 전체 정지 (P1)', fn: () => {
+      ALL_IDS.forEach(id => publish(id, 'PRESET:1'));
+  }},
+  { t: 570, label: '💡 조명 15%', fn: () => { sendLightCmd('BRIGHTNESS:15'); }},
+  { t: 585, label: '💡 소등', fn: () => { sendLightCmd('BLACKOUT'); }},
+  { t: 597, label: '✅ 데모 완료 — 자동 복귀', fn: () => {
+      sendLightCmd('CLEAR'); sendLightCmd('MODE:AUTO');
+      _demoRunning = false; _updateDemoUI();
+  }},
+];
+
+function startDemo() {
+  if (_demoRunning) return;
+  if (!mqttClient || !mqttClient.connected) { alert('MQTT에 연결되지 않았습니다.'); return; }
+  _demoRunning = true;
+  _demoStartMs = Date.now();
+  _demoTimers  = [];
+  _updateDemoUI();
+  _sendPdCue('프리셋 데모 시작');
+  _logDemo('▶ 10분 구동 데모 시작');
+
+  DEMO_STEPS.forEach(step => {
+    const tid = setTimeout(() => { step.fn(); _logDemo(step.label); }, step.t * 1000);
+    _demoTimers.push(tid);
+  });
+  const endTid = setTimeout(() => {
+    if (_demoRunning) { _demoRunning = false; _updateDemoUI(); _logDemo('⏹ 완료'); }
+  }, DEMO_DURATION_S * 1000);
+  _demoTimers.push(endTid);
+
+  _demoTickId = setInterval(_updateDemoProgress, 1000);
+}
+
+function stopDemo() {
+  _demoTimers.forEach(id => clearTimeout(id));
+  _demoTimers = [];
+  if (_demoTickId) { clearInterval(_demoTickId); _demoTickId = null; }
+  _demoRunning = false;
+  ALL_IDS.forEach(id => publish(id, 'PRESET:1'));
+  sendLightCmd('CLEAR'); sendLightCmd('MODE:AUTO');
+  _updateDemoUI();
+  _logDemo('⏹ 데모 중단 — AUTO 복귀');
+}
+
+function _updateDemoUI() {
+  const startBtn = document.getElementById('demo-start-btn');
+  const stopBtn  = document.getElementById('demo-stop-btn');
+  if (startBtn) startBtn.disabled = _demoRunning;
+  if (stopBtn)  stopBtn.disabled  = !_demoRunning;
+  if (!_demoRunning) {
+    if (_demoTickId) { clearInterval(_demoTickId); _demoTickId = null; }
+    const bar = document.getElementById('demo-progress');
+    const tim = document.getElementById('demo-timer');
+    if (bar) bar.style.width = '0%';
+    if (tim) tim.textContent = '10:00';
+  }
+}
+
+function _updateDemoProgress() {
+  if (!_demoRunning) return;
+  const elapsed = (Date.now() - _demoStartMs) / 1000;
+  const pct     = Math.min(100, (elapsed / DEMO_DURATION_S) * 100);
+  const remain  = Math.max(0, DEMO_DURATION_S - Math.floor(elapsed));
+  const mm = String(Math.floor(remain / 60)).padStart(2, '0');
+  const ss = String(remain % 60).padStart(2, '0');
+  const bar = document.getElementById('demo-progress');
+  const tim = document.getElementById('demo-timer');
+  if (bar) bar.style.width = pct + '%';
+  if (tim) tim.textContent = `${mm}:${ss}`;
+}
+
+function _logDemo(msg) {
+  const el = document.getElementById('demo-log');
+  const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  if (el) el.textContent = `[${ts}] ${msg}`;
+  logCmd(`[데모] ${msg}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  커스텀 타임라인
+// ═══════════════════════════════════════════════════════════════════════════
+let _customSteps   = [];   // [{t:seconds, target:'all'|'gp'|'if'|'gf'|'gp1'|'gp2', action:'PRESET:2'|'RESET'|'SOUND:1'|...}]
+let _customRunning = false;
+let _customTimers  = [];
+let _customTickId  = null;
+let _customStartMs = 0;
+
+const _CS_TARGET_OPTS = [
+  ['all',  '전체 (GP+IF)'],
+  ['gp',   'GP 전체 (1-12)'],
+  ['if',   'IF 전체 (13-18)'],
+  ['gf',   'GP:꽃 (1-8)'],
+  ['gp1',  'GP:꽃잎1 (9-10)'],
+  ['gp2',  'GP:꽃잎2 (11-12)'],
+];
+const _CS_ACTION_OPTS = [
+  ['RESET',    '⛔ 리셋 (정지)'],
+  ['PRESET:1', 'P1 — 정지'],
+  ['PRESET:2', 'P2 — 유영'],
+  ['PRESET:3', 'P3 — 느린 유영'],
+  ['PRESET:4', 'P4 — 교번/힘찬'],
+  ['PRESET:5', 'P5 — 활발한/숨'],
+  ['PRESET:6', 'P6 — 순차 재생'],
+  ['PRESET:7', 'P7 — 랜덤 재생'],
+  ['SOUND:1',  '🔊 사운드 1'],
+  ['SOUND:2',  '🔊 사운드 2'],
+  ['SOUND:3',  '🔊 사운드 3'],
+  ['SOUND:4',  '🔊 사운드 4'],
+  ['SOUND:0',  '🔇 사운드 정지'],
+];
+
+function _loadCustomSteps() {
+  try {
+    const s = localStorage.getItem('customTimeline');
+    if (s) { _customSteps = JSON.parse(s); return; }
+  } catch(e) {}
+  _customSteps = [
+    { t:  0, target:'all', action:'RESET'    },
+    { t: 30, target:'gp',  action:'PRESET:3' },
+    { t: 90, target:'gp',  action:'PRESET:2' },
+  ];
+}
+
+function _saveCustomSteps() {
+  localStorage.setItem('customTimeline', JSON.stringify(_customSteps));
+}
+
+function _readStepsFromUI() {
+  const rows = document.querySelectorAll('.cs-row');
+  _customSteps = [];
+  rows.forEach(row => {
+    const timeStr = row.querySelector('.cs-time').value.trim();
+    const target  = row.querySelector('.cs-target').value;
+    const action  = row.querySelector('.cs-action').value;
+    const parts   = timeStr.split(':');
+    let secs = parts.length === 2
+      ? (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0)
+      : (parseInt(parts[0]) || 0);
+    _customSteps.push({ t: secs, target, action });
+  });
+}
+
+function _csTargetIds(target) {
+  switch(target) {
+    case 'gp':  return GP_IDS.slice();
+    case 'if':  return IF_IDS.slice();
+    case 'gf':  return GF_IDS.slice();
+    case 'gp1': return GP1_IDS.slice();
+    case 'gp2': return GP2_IDS.slice();
+    default:    return ALL_IDS.slice();
+  }
+}
+
+function _execCustomStep(step) {
+  const cmd = step.action;
+  if (cmd.startsWith('SOUND:')) {
+    ALL_IDS.forEach(id => publish(id, cmd));
+  } else {
+    _csTargetIds(step.target).forEach(id => publish(id, cmd));
+  }
+  const tLabel = { all:'전체', gp:'GP', if:'IF', gf:'GP꽃', gp1:'GP꽃잎1', gp2:'GP꽃잎2' }[step.target] || step.target;
+  const mm = String(Math.floor(step.t / 60)).padStart(1,'0');
+  const ss = String(step.t % 60).padStart(2,'0');
+  _logCustom(`[${mm}:${ss}] ${tLabel} → ${cmd}`);
+}
+
+function addCustomStep() {
+  _readStepsFromUI();
+  const lastT = _customSteps.length ? _customSteps[_customSteps.length - 1].t + 30 : 0;
+  _customSteps.push({ t: lastT, target:'gp', action:'PRESET:2' });
+  _renderCustomSteps();
+}
+
+function removeCustomStep(idx) {
+  _readStepsFromUI();
+  _customSteps.splice(idx, 1);
+  _renderCustomSteps();
+}
+
+function sortCustomSteps() {
+  _readStepsFromUI();
+  _customSteps.sort((a, b) => a.t - b.t);
+  _renderCustomSteps();
+}
+
+function _renderCustomSteps() {
+  const container = document.getElementById('custom-steps');
+  if (!container) return;
+
+  container.innerHTML = _customSteps.length === 0
+    ? '<div class="cs-empty">스텝 없음 — ＋ 스텝 추가 버튼으로 시작하세요</div>'
+    : _customSteps.map((step, i) => {
+        const mm = String(Math.floor(step.t / 60));
+        const ss = String(step.t % 60).padStart(2,'0');
+        const tOpts = _CS_TARGET_OPTS.map(([v,l]) =>
+          `<option value="${v}"${step.target===v?' selected':''}>${l}</option>`).join('');
+        const aOpts = _CS_ACTION_OPTS.map(([v,l]) =>
+          `<option value="${v}"${step.action===v?' selected':''}>${l}</option>`).join('');
+        return `<div class="cs-row" data-idx="${i}">
+          <span class="cs-seq">${i+1}</span>
+          <input class="cs-time" type="text" value="${mm}:${ss}" placeholder="분:초" onchange="sortCustomSteps()" title="시간 (분:초 또는 초)">
+          <select class="cs-target">${tOpts}</select>
+          <select class="cs-action">${aOpts}</select>
+          <button class="cs-del" onclick="removeCustomStep(${i})" title="삭제">✕</button>
+        </div>`;
+      }).join('');
+
+  const maxT   = _customSteps.reduce((m, s) => Math.max(m, s.t), 0);
+  const durEl  = document.getElementById('custom-duration');
+  if (durEl) durEl.textContent = Math.floor(maxT/60) + '분 ' + (maxT%60) + '초';
+
+  _saveCustomSteps();
+}
+
+function startCustom() {
+  _readStepsFromUI();
+  if (_customSteps.length === 0) { alert('스텝이 없습니다. 먼저 스텝을 추가하세요.'); return; }
+  if (!mqttClient || !mqttClient.connected) { alert('MQTT에 연결되지 않았습니다.'); return; }
+
+  _customRunning = true;
+  _customStartMs = Date.now();
+  _customTimers  = [];
+  _updateCustomUI();
+  _sendPdCue('커스텀 타임라인 시작');
+
+  const maxT = _customSteps.reduce((m, s) => Math.max(m, s.t), 0);
+  _logCustom('▶ 커스텀 타임라인 시작');
+
+  _customSteps.forEach(step => {
+    const tid = setTimeout(() => {
+      if (_customRunning) _execCustomStep(step);
+    }, step.t * 1000);
+    _customTimers.push(tid);
+  });
+
+  // 마지막 스텝 후 1초에 자동 종료
+  const endTid = setTimeout(() => {
+    if (_customRunning) {
+      _customRunning = false;
+      _updateCustomUI();
+      _logCustom('✅ 완료');
+    }
+  }, (maxT + 1) * 1000);
+  _customTimers.push(endTid);
+
+  _customTickId = setInterval(_updateCustomProgress, 500);
+}
+
+function stopCustom() {
+  _customTimers.forEach(t => clearTimeout(t));
+  _customTimers = [];
+  if (_customTickId) { clearInterval(_customTickId); _customTickId = null; }
+  _customRunning = false;
+  _updateCustomUI();
+  _logCustom('⏹ 중단');
+  _sendPdCue('커스텀 중단', 0);
+  // 사운드 스톱
+  _stopSound();
+  // 전체 로봇 리셋
+  publish('all', 'RESET');
+  logCmd('⏹ 전체 스톱 — RESET(all) + SOUND:0');
+  // 2초 후 리셋 재전송
+  setTimeout(() => { publish('all', 'RESET'); logCmd('↺ [재전송] RESET(all)'); }, 2000);
+}
+
+function _updateCustomUI() {
+  const startBtn = document.getElementById('custom-start-btn');
+  const stopBtn  = document.getElementById('custom-stop-btn');
+  if (startBtn) startBtn.disabled = _customRunning;
+  if (stopBtn)  stopBtn.disabled  = !_customRunning;
+  if (!_customRunning) {
+    if (_customTickId) { clearInterval(_customTickId); _customTickId = null; }
+    const bar = document.getElementById('custom-progress');
+    const tim = document.getElementById('custom-timer');
+    if (bar) bar.style.width = '0%';
+    if (tim) tim.textContent = '--:--';
+  }
+}
+
+function _updateCustomProgress() {
+  if (!_customRunning) return;
+  const elapsed = (Date.now() - _customStartMs) / 1000;
+  const maxT    = _customSteps.reduce((m, s) => Math.max(m, s.t), 1);
+  const pct     = Math.min(100, (elapsed / maxT) * 100);
+  const bar = document.getElementById('custom-progress');
+  const tim = document.getElementById('custom-timer');
+  if (bar) bar.style.width = pct + '%';
+  if (tim) {
+    const mm = String(Math.floor(elapsed / 60)).padStart(2,'0');
+    const ss = String(Math.floor(elapsed % 60)).padStart(2,'0');
+    tim.textContent = `${mm}:${ss}`;
+  }
+}
+
+function _logCustom(msg) {
+  const el = document.getElementById('custom-log');
+  const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  if (el) el.textContent = `[${ts}] ${msg}`;
+  logCmd(`[커스텀] ${msg}`);
+}
+
+function showDemoTab(tab) {
+  document.getElementById('demo-tab-preset').style.display = tab === 'preset' ? '' : 'none';
+  document.getElementById('demo-tab-custom').style.display = tab === 'custom' ? '' : 'none';
+  document.querySelectorAll('.demo-tab').forEach((b, i) => {
+    const isActive = (i === 0 && tab === 'preset') || (i === 1 && tab === 'custom');
+    b.classList.toggle('dt-active', isActive);
+  });
+  if (tab === 'custom') _renderCustomSteps();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Pd 큐 (LAN UDP → Pure Data)
+// ═══════════════════════════════════════════════════════════════════════════
+let _pdCue = { ip: '', port: 3000, val: 1 };
+
+function _loadPdCue() {
+  try {
+    const s = localStorage.getItem('pdCue');
+    if (s) _pdCue = { ..._pdCue, ...JSON.parse(s) };
+  } catch(e) {}
+  _applyPdCueToUI();
+}
+
+function _applyPdCueToUI() {
+  const ipEl   = document.getElementById('pd-ip');
+  const portEl = document.getElementById('pd-port');
+  const valEl  = document.getElementById('pd-val');
+  if (ipEl)   ipEl.value   = _pdCue.ip;
+  if (portEl) portEl.value = _pdCue.port;
+  if (valEl)  valEl.value  = _pdCue.val;
+  _updatePdCueStatus();
+}
+
+function _updatePdCueStatus() {
+  const el = document.getElementById('pd-cue-status');
+  if (!el) return;
+  if (_pdCue.ip) {
+    el.textContent = `→ ${_pdCue.ip}:${_pdCue.port}  val=${_pdCue.val}`;
+    el.style.color = '#6a9';
+  } else {
+    el.textContent = '(미설정)';
+    el.style.color = '#556';
+  }
+}
+
+function togglePdCue() {
+  const el = document.getElementById('pd-cue-cfg');
+  if (!el) return;
+  const show = el.style.display === 'none';
+  el.style.display = show ? '' : 'none';
+  if (show) _applyPdCueToUI();
+}
+
+function savePdCue() {
+  _pdCue.ip   = (document.getElementById('pd-ip')?.value   || '').trim();
+  _pdCue.port = parseInt(document.getElementById('pd-port')?.value) || 3000;
+  _pdCue.val  = Math.max(0, Math.min(255, parseInt(document.getElementById('pd-val')?.value) || 1));
+  localStorage.setItem('pdCue', JSON.stringify(_pdCue));
+  _updatePdCueStatus();
+  logCmd(`[Pd큐] 설정 저장 — ${_pdCue.ip}:${_pdCue.port} val=${_pdCue.val}`);
+}
+
+function testPdCue() {
+  savePdCue();
+  if (!_pdCue.ip) { alert('IP를 입력하세요.'); return; }
+  _sendPdCue(`테스트 (val=${_pdCue.val})`);
+}
+
+function _sendPdCue(label, val) {
+  if (!_pdCue.ip) return;
+  if (!mqttClient || !mqttClient.connected) return;
+  const v = (val !== undefined) ? val : _pdCue.val;
+  const payload = JSON.stringify({ ip: _pdCue.ip, port: _pdCue.port, val: v });
+  mqttClient.publish('gb16/cue', payload, { qos: 0 });
+  logCmd(`[Pd큐] → ${_pdCue.ip}:${_pdCue.port}  val=${v}${label ? '  (' + label + ')' : ''}`);
+}
+
+// ── 공연 일정 ────────────────────────────────────────────────────────────────
+// 한국 공휴일 2026 (YYYY-MM-DD)
+// ※ 음력 기반 공휴일(설날·추석·부처님오신날)은 정부 발표 기준 — 필요 시 수정
+const KR_HOLIDAYS_2026 = new Set([
+  '2026-01-01',                               // 신정
+  '2026-02-16','2026-02-17','2026-02-18',     // 설날 연휴 (음력 1/1 ≈ 2/17)
+  '2026-03-01','2026-03-02',                  // 삼일절 + 대체공휴일
+  '2026-05-05',                               // 어린이날
+  '2026-05-24','2026-05-25',                  // 부처님오신날 + 대체 (음력 4/8 ≈ 5/24)
+  '2026-06-06',                               // 현충일
+  '2026-08-15','2026-08-17',                  // 광복절 + 대체
+  '2026-09-23','2026-09-24','2026-09-25',     // 추석 연휴 (음력 8/15 ≈ 9/25)
+  '2026-10-03','2026-10-05',                  // 개천절 + 대체
+  '2026-10-09',                               // 한글날
+  '2026-12-25',                               // 성탄절
+]);
+
+// 요일별 공연 시간 (0=일,1=월,2=화,3=수,4=목,5=금,6=토) — 월요일 미정의 = 공연없음
+const PERF_SCHEDULE = {
+  0: [11,13,14,15,17],        // 일
+  2: [11,13,15,17,19],        // 화
+  3: [11,13,15,17,19],        // 수
+  4: [11,13,15,17,19],        // 목
+  5: [11,13,14,15,17,19],     // 금
+  6: [11,13,14,15,17],        // 토
+  holiday: [11,13,14,15,17],  // 공휴일
+};
+
+function _dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function _isHoliday(d) { return KR_HOLIDAYS_2026.has(_dateKey(d)); }
+function _getDaySchedule(d) {
+  if (_isHoliday(d)) return PERF_SCHEDULE.holiday || [];
+  return PERF_SCHEDULE[d.getDay()] || [];
+}
+function _getNextPerf() {
+  const now = new Date();
+  for (let di = 0; di < 14; di++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + di);
+    d.setHours(0,0,0,0);
+    for (const h of _getDaySchedule(d)) {
+      const t = new Date(d); t.setHours(h,0,0,0);
+      if (t > now) return t;
+    }
+  }
+  return null;
+}
+
+function _updateScheduleUI() {
+  const now = new Date();
+
+  // 오늘 슬롯
+  const todayEl = document.getElementById('sched-today-list');
+  if (todayEl) {
+    const hours = _getDaySchedule(now);
+    if (hours.length === 0) {
+      todayEl.innerHTML = '<span style="color:#445">공연 없음</span>';
+    } else {
+      todayEl.innerHTML = hours.map(h => {
+        const t = new Date(now); t.setHours(h,0,0,0);
+        const past = t < now;
+        return `<span class="sched-slot${past?' sched-past':''}">${String(h).padStart(2,'0')}:00</span>`;
+      }).join('');
+    }
+  }
+
+  // 카운트다운
+  const next = _getNextPerf();
+  const nextTimeEl  = document.getElementById('sched-next-time');
+  const countdownEl = document.getElementById('sched-countdown');
+  if (next) {
+    const dayNames = ['일','월','화','수','목','금','토'];
+    const isToday  = next.toDateString() === now.toDateString();
+    const dateStr  = isToday ? '' : `${next.getMonth()+1}/${next.getDate()}(${dayNames[next.getDay()]}) `;
+    if (nextTimeEl) nextTimeEl.textContent = `${dateStr}${String(next.getHours()).padStart(2,'0')}:00`;
+    const diff = Math.max(0, Math.floor((next - now) / 1000));
+    const hh = Math.floor(diff / 3600);
+    const mm = Math.floor((diff % 3600) / 60);
+    const ss = diff % 60;
+    if (countdownEl) countdownEl.textContent =
+      `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+
+    // 자동 트리거: 정각 ±5초, 커스텀 미실행 중
+    const chk = document.getElementById('sched-auto-chk');
+    if (chk && chk.checked && diff <= 5 && !_customRunning) {
+      _logCustom('🔔 스케줄 자동 시작');
+      startCustom();
+    }
+  } else {
+    if (nextTimeEl)  nextTimeEl.textContent  = '—';
+    if (countdownEl) countdownEl.textContent = '--:--:--';
+  }
+}
+
+function _buildWeekTable() {
+  const el = document.getElementById('sched-week-table');
+  if (!el) return;
+  const now = new Date();
+  const dayNames = ['일','월','화','수','목','금','토'];
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now); d.setDate(d.getDate() + i); d.setHours(0,0,0,0);
+    days.push(d);
+  }
+  let html = '<table class="sched-week-tbl"><thead><tr>';
+  days.forEach(d => {
+    const isToday  = d.toDateString() === now.toDateString();
+    const holiday  = _isHoliday(d);
+    html += `<th class="${isToday?'sw-today':''}${holiday?' sw-holiday':''}">` +
+            `${d.getMonth()+1}/${d.getDate()}<br>` +
+            `<span>${dayNames[d.getDay()]}${holiday?'🔴':''}</span></th>`;
+  });
+  html += '</tr></thead><tbody>';
+  const maxSlots = Math.max(...days.map(d => _getDaySchedule(d).length), 1);
+  for (let si = 0; si < maxSlots; si++) {
+    html += '<tr>';
+    days.forEach(d => {
+      const slots   = _getDaySchedule(d);
+      const isToday = d.toDateString() === now.toDateString();
+      const h = slots[si];
+      if (h !== undefined) {
+        const t = new Date(d); t.setHours(h,0,0,0);
+        const past = t < now;
+        html += `<td class="${isToday?'sw-today':''}${past?' sw-past':''}">${String(h).padStart(2,'0')}:00</td>`;
+      } else {
+        html += `<td></td>`;
+      }
+    });
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function initSchedule() {
+  _buildWeekTable();
+  _updateScheduleUI();
+  setInterval(_updateScheduleUI, 1000);
+  setInterval(_buildWeekTable, 60000);
+}
+
+// ── 전원 제어 (Tapo) ────────────────────────────────────────────────────────
+const GROUP_NAMES = {
+  1: '황금칩 꽃',
+  2: '황금빛 꽃잎 1',
+  3: '황금빛 꽃잎 2',
+  4: '비결정적 유영',
+  5: '아해들',
+  6: '황금빛 꽃 조명',
+};
+
+function sendPower(groupId, action) {
+  const plog = document.getElementById('pwr-log');
+  if (!mqttClient || !mqttClient.connected) {
+    plog.textContent = '⚠ MQTT 미연결 — 전원 제어 불가';
+    return;
+  }
+  const name   = GROUP_NAMES[groupId] || `그룹${groupId}`;
+  const labels = { on: 'ON (켜기)', off: 'OFF (끄기)', reset: '재시작 (↺)' };
+  mqttClient.publish(`gb16/power/group/${groupId}`, action, { qos: 1 });
+  const icons = { on: '✅', off: '🔴', reset: '⏳' };
+  plog.textContent = `${icons[action]} ${groupId} [${name}] ${labels[action]}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  로봇 카드 렌더링
+// ═══════════════════════════════════════════════════════════════════════════
+function tempClass(v) {
+  if (v === null) return '';
+  if (v >= 45) return 'temp-high';
+  if (v >= 35) return 'temp-ok';
+  return 'temp-cold';
+}
+
+function tempStr(v) {
+  return v !== null ? v.toFixed(1) + '°' : '—';
+}
+
+const ST_CLASS = { IDLE:'st-IDLE', HEAT:'st-HEAT', SUST:'st-SUST', COOL:'st-COOL', 'ERR!':'st-ERR', '--':'st----' };
+
+function cardBorderClass(r) {
+  if (!GP_IDS.includes(r.id)) return ST_CLASS[r.state] || 'st-IDLE';
+  // GP: 우선순위 ERR > HEAT > SUST > COOL, 둘 중 하나라도
+  for (const s of ['ERR!','HEAT','SUST','COOL']) {
+    if (r.state === s || r.state2 === s) return ST_CLASS[s];
+  }
+  return 'st-IDLE';
+}
+
+function renderCard(r) {
+  const isGP    = false;
+  const offline = r.lastSeen ? (Date.now() - r.lastSeen > OFFLINE_TIMEOUT) : true;
+  const since   = r.lastSeen ? Math.floor((Date.now() - r.lastSeen) / 1000) + 's' : 'offline';
+  const isSel   = selected.has(r.id);
+  const modeStr = r.mode === 2 ? `P${r.preset}` : '';
+  const bc      = cardBorderClass(r);
+
+  // GP: U1 + U2 개별 상태·온도 행
+  const gpUnits = isGP ? `
+    <div class="gp-units">
+      <div class="unit-row">
+        <span class="unit-label">U1</span>
+        <span class="unit-state ${ST_CLASS[r.state]||'st-IDLE'}">${r.state}</span>
+        <span class="unit-temp ${tempClass(r.s1)}">${tempStr(r.s1)}</span>
+      </div>
+      <div class="unit-row">
+        <span class="unit-label">U2</span>
+        <span class="unit-state ${ST_CLASS[r.state2]||'st-IDLE'}">${r.state2}</span>
+        <span class="unit-temp ${tempClass(r.s2)}">${tempStr(r.s2)}</span>
+      </div>
+    </div>` : `
+    <div class="card-temps">
+      <span>S1 <span class="temp-val ${tempClass(r.s1)}">${tempStr(r.s1)}</span></span>
+      <span>S2 <span class="temp-val ${tempClass(r.s2)}">${tempStr(r.s2)}</span></span>
+    </div>`;
+
+  return `<div class="robot-card${isSel?' selected':''}${offline?' offline':''}"
+    id="card-${r.id}" onclick="toggleSelect(${r.id})">
+    <div class="card-header">
+      <span class="card-id">R${String(r.id).padStart(2,'0')}</span>
+      <span class="type-badge ${isGP?'type-gp':'type-if'}">${isGP?'GP':'IF'}</span>
+      ${!isGP ? `<span class="state-badge ${ST_CLASS[r.state]||'st-IDLE'}">${r.state}</span>` : ''}
+      ${modeStr ? `<span class="mode-badge">${modeStr}</span>` : ''}
+    </div>
+    ${gpUnits}
+    <div class="card-footer">
+      ${r.fault ? `<span class="fault-badge">F${r.code}</span>` : '<span></span>'}
+      <span class="amb-val" style="font-size:0.68rem">amb ${tempStr(r.amb)}</span>
+      <span class="last-seen">${since}</span>
+      <div class="sel-indicator"></div>
+    </div>
+  </div>`;
+}
+
+function renderAll() {
+  document.getElementById('grid-gf').innerHTML   = GF_IDS.map(id  => renderCard(robots[id])).join('');
+  document.getElementById('grid-gp1').innerHTML  = GP1_IDS.map(id => renderCard(robots[id])).join('');
+  document.getElementById('grid-gp2').innerHTML  = GP2_IDS.map(id => renderCard(robots[id])).join('');
+  document.getElementById('grid-if').innerHTML   = IF_IDS.map(id  => renderCard(robots[id])).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATUS 파싱 (bridge.py → MQTT: gb16/robot/{id}/log)
+//  형식: "5;state=HEAT;state2=IDLE;s1=43.2;s2=41.1;amb=22.5;fault=0;code=0;..."
+// ═══════════════════════════════════════════════════════════════════════════
+function parseLog(payload) {
+  const parts  = payload.trim().split(';');
+  const rid    = parseInt(parts[0]);
+  if (!robots[rid]) return;
+  const kv = {};
+  for (let i = 1; i < parts.length; i++) {
+    const [k, v] = parts[i].split('=');
+    if (k && v !== undefined) kv[k] = v;
+  }
+  const r    = robots[rid];
+  r.state    = kv.state  || r.state;
+  r.state2   = kv.state2 || r.state2;
+  r.s1       = kv.s1    != null ? parseFloat(kv.s1)    : r.s1;
+  r.s2       = kv.s2    != null ? parseFloat(kv.s2)    : r.s2;
+  r.amb      = kv.amb   != null ? parseFloat(kv.amb)   : r.amb;
+  const prevFault = r.fault;
+  r.fault    = parseInt(kv.fault  ?? r.fault);
+  r.code     = parseInt(kv.code   ?? r.code);
+  if (r.fault && r.fault !== prevFault) {
+    const FAULT_NAMES = {
+      11:'MLX1 FAIL', 12:'MLX1 FROZEN', 13:'MLX1 INIT', 14:'MLX1 SPIKE',
+      21:'MLX2 FAIL', 22:'MLX2 FROZEN', 23:'MLX2 INIT', 24:'MLX2 I2C RECOVER', 25:'MLX2 SPIKE',
+      31:'MLX1&2 INIT', 32:'COOL TIMEOUT', 99:'WDT RESET'
+    };
+    logError('fault', `R${String(rid).padStart(2,'0')} F${r.code} ${FAULT_NAMES[r.code]||''}`);
+  }
+  // 자동리셋용 에러 타이머: fault > 0 이면 에러 시작 시각 기록
+  const isErr = r.fault > 0;
+  if (isErr) {
+    delete faultClearAt[rid];             // 진행 중인 클리어 예약 취소
+    if (errorSince[rid] == null) errorSince[rid] = Date.now();
+  } else {
+    // brief recovery 무시: 15초 지속 정상 상태일 때만 errorSince 클리어
+    if (errorSince[rid] != null && faultClearAt[rid] == null) {
+      faultClearAt[rid] = Date.now();     // 클리어 예약
+    }
+  }
+
+  r.mode     = parseInt(kv.mode   ?? r.mode);
+  r.preset   = parseInt(kv.preset ?? r.preset);
+  r.lastSeen = Date.now();
+
+  // 카드만 업데이트 (전체 재렌더 방지)
+  const el = document.getElementById(`card-${rid}`);
+  if (el) {
+    const newEl = document.createElement('div');
+    newEl.innerHTML = renderCard(r);
+    const card = newEl.firstElementChild;
+    el.replaceWith(card);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MQTT 연결
+// ═══════════════════════════════════════════════════════════════════════════
+function connectMqtt(useAlt) {
+  usingAlt = useAlt;
+  let url, broker;
+  if (mqttBrokerOverride) {
+    url = mqttBrokerOverride; broker = 'custom';
+  } else if (!isLocal()) {
+    url = BROKER_EXT; broker = 'HiveMQ(ext)';
+  } else {
+    url = useAlt ? BROKER_ALT : BROKER;
+    broker = useAlt ? 'localhost(alt)' : 'localhost';
+  }
+  const bar    = document.getElementById('mqtt-status');
+  bar.style.color = '#888';
+  bar.textContent = `MQTT 연결 중... (${broker})`;
+
+  const clientId = 'gb16_ctrl_' + Math.random().toString(36).slice(2, 9);
+  const opts = {
+    clientId,
+    clean: true,
+    reconnectPeriod: 0,
+    connectTimeout: 8000,
+  };
+  if (mqttUser) { opts.username = mqttUser; opts.password = mqttPass; }
+  mqttClient = mqtt.connect(url, opts);
+
+  mqttClient.on('connect', () => {
+    bar.style.color = '#69f0ae';
+    bar.textContent = `✅ MQTT 연결됨 — ${broker}`;
+    mqttClient.subscribe('gb16/robot/+/log');   // 와일드카드 단일 구독 (18개 개별 구독 대신)
+    mqttClient.subscribe('gb16/robot/+/ack', { qos: 1 }); // CMD ACK
+    mqttClient.subscribe('audience/present');
+    if (LIGHT_ENABLED) mqttClient.subscribe('gb16/light/status', { qos: 0 });
+  });
+
+  mqttClient.on('message', (_topic, payload) => {
+    const _text = payload.toString();
+    if (_topic === 'audience/present') {
+      handleAudience(_text.trim() === 'true');
+      return;
+    }
+    if (LIGHT_ENABLED && _topic === 'gb16/light/status') {
+      handleLightStatus(_text);
+      return;
+    }
+    // CMD ACK 처리: gb16/robot/<id>/ack — TIMEOUT만 에러로그에 기록
+    const ackMatch = _topic.match(/^sma\/robot\/(\d+)\/ack$/);
+    if (ackMatch) {
+      const rid = parseInt(ackMatch[1], 10);
+      const rLabel = `R${String(rid).padStart(2,'0')}`;
+      if (_text.startsWith('TIMEOUT:')) {
+        logError('error', `${rLabel} CMD 무응답(TIMEOUT): ${_text.slice(8)}`);
+      }
+      return;
+    }
+    parseLog(_text);
+  });
+
+  mqttClient.on('error', err => {
+    bar.style.color = '#f44336';
+    bar.textContent = `❌ 오류 (${broker}): ${err.message}`;
+  });
+
+  mqttClient.on('close', () => {
+    bar.style.color = '#ffd54f';
+    bar.textContent = `🔄 재연결 중... (${broker})`;
+    if (!isLocal()) {
+      // 외부 접속: HiveMQ로 재연결
+      setTimeout(() => { mqttClient.end(true); connectMqtt(false); }, 5000);
+    } else if (!usingAlt) {
+      setTimeout(() => {
+        mqttClient.end(true);
+        connectMqtt(true);
+      }, 3000);
+    } else {
+      setTimeout(() => {
+        mqttClient.end(true);
+        connectMqtt(false);
+      }, 5000);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  주기적 오프라인 체크 + 카드 갱신
+// ═══════════════════════════════════════════════════════════════════════════
+const offlineRobots = new Set();
+
+setInterval(() => {
+  ALL_IDS.forEach(id => {
+    const el = document.getElementById(`card-${id}`);
+    if (!el) return;
+    const r       = robots[id];
+    const offline = r.lastSeen ? (Date.now() - r.lastSeen > OFFLINE_TIMEOUT) : true;
+    el.classList.toggle('offline', offline);
+    const lsEl = el.querySelector('.last-seen');
+    if (lsEl && r.lastSeen) {
+      lsEl.textContent = Math.floor((Date.now() - r.lastSeen) / 1000) + 's';
+    }
+    // 오프라인/온라인 상태 변화 감지
+    if (offline && !offlineRobots.has(id)) {
+      offlineRobots.add(id);
+      if (r.lastSeen) logError('offline', `R${String(id).padStart(2,'0')} 오프라인`);
+    } else if (!offline && offlineRobots.has(id)) {
+      offlineRobots.delete(id);
+      logError('online', `R${String(id).padStart(2,'0')} 복귀`);
+    }
+  });
+
+  // ── fault 클리어 딜레이 처리 (15초 지속 정상 후 errorSince 클리어) ────
+  const _now = Date.now();
+  for (const ridStr of Object.keys(faultClearAt)) {
+    if (_now - faultClearAt[ridStr] >= FAULT_CLEAR_DELAY_MS) {
+      delete errorSince[ridStr];
+      delete faultClearAt[ridStr];
+    }
+  }
+
+  // ── 자동 전원리셋 체크 ───────────────────────────────────────────────────
+  for (const [group, ids] of Object.entries(GROUP_ROBOT_IDS)) {
+    if (!autoResetEnabled[group]) continue;
+    // 쿨다운 중이면 스킵 (마지막 자동리셋 후 2분 이내)
+    if (lastAutoReset[group] && _now - lastAutoReset[group] < AUTO_RESET_COOLDOWN_MS) continue;
+    // 그룹 내 30초 이상 fault 상태인 유닛 확인
+    const hasLongErr = ids.some(id => errorSince[id] != null && _now - errorSince[id] >= AUTO_ERR_MS);
+    if (hasLongErr) {
+      lastAutoReset[group] = _now;
+      const tapoId = GROUP_TAPO[group];
+      sendPower(tapoId, 'reset');
+      logCmd(`⚠ [자동리셋] ${group.toUpperCase()} Tapo-${tapoId} 전원 재시작`);
+      logError('fault', `[자동리셋] ${group.toUpperCase()} 30초 에러 → 전원 재시작`);
+    }
+  }
+}, 1000);
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  초기화
+// ═══════════════════════════════════════════════════════════════════════════
+renderAll();
+updateSelCount();
+applyCamPort(); // 페이지 로드 시 자동 시작 (실패 시 5초마다 자동 재시도)
+_loadCustomSteps();  // 커스텀 타임라인 저장 데이터 복원
+_loadPdCue();        // Pd 큐 설정 복원
+initSchedule();      // 공연 일정 카운트다운 시작
+
+if (typeof mqtt !== 'undefined') {
+  connectMqtt(false);
+} else {
+  document.getElementById('mqtt-status').textContent = '❌ mqtt.js 로드 실패 — 인터넷 연결 확인';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  조명 제어
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 조명 인터페이스 활성화 여부 — false: 조명 패널 숨김 + 모든 조명 명령 무시
+const LIGHT_ENABLED = false;
+
+// 그룹 → 조명 ID 매핑 (dmx_controller.py LIGHT_MAP과 일치)
+const LIGHT_GROUPS = {
+  gp_flower: [1, 2, 3, 4, 5, 6, 7, 8],
+  gp_petal:  [9, 10, 11, 12],
+  if:        [13, 14, 15],
+  children:  [16, 17, 18],
+};
+
+let _lightFadeTimer = null;
+
+function _fadeLights() {
+  if (!LIGHT_ENABLED) return;
+  if (_lightFadeTimer !== null) {
+    clearInterval(_lightFadeTimer);
+    _lightFadeTimer = null;
+  }
+  const slider  = document.getElementById('light-brightness');
+  const bvEl    = document.getElementById('light-bv');
+  const startPct = slider ? parseInt(slider.value) : 100;
+  if (startPct === 0) return;   // 이미 꺼져 있으면 생략
+  const STEPS    = 20;
+  const MS       = 10000 / STEPS;  // 500 ms/step
+  let   step     = 0;
+  logCmd('🌅 조명 페이드아웃 시작 (10초)');
+  _lightFadeTimer = setInterval(() => {
+    step++;
+    const pct = Math.round(startPct * (1 - step / STEPS));
+    if (slider)  slider.value       = pct;
+    if (bvEl)    bvEl.textContent   = pct + '%';
+    sendLightCmd('BRIGHTNESS:' + (pct / 100).toFixed(2));
+    if (step >= STEPS) {
+      clearInterval(_lightFadeTimer);
+      _lightFadeTimer = null;
+      sendLightCmd('BLACKOUT');
+      logCmd('🌑 조명 페이드아웃 완료');
+    }
+  }, MS);
+}
+
+function sendLightCmd(cmd) {
+  if (!LIGHT_ENABLED) return;
+  if (!mqttClient || !mqttClient.connected) return;
+  mqttClient.publish('gb16/light/cmd', cmd, { qos: 1 });
+  const el = document.getElementById('light-log');
+  if (el) el.textContent = `[${new Date().toLocaleTimeString('ko-KR', {hour12:false})}] ${cmd}`;
+}
+
+// ── /launch/light_gui (LIGHT DISABLED) ─────────────────────────────────
+// function launchLightGui() {
+//   fetch('/launch/light_gui')
+//     .then(r => r.json())
+//     .then(d => { if (!d.ok) alert('GUI 실행 실패: ' + d.error); })
+//     .catch(e => alert('서버 오류: ' + e));
+// }
+
+function sendLightMode(val) {
+  sendLightCmd('MODE:' + val);
+}
+
+function sendLightScene(val) {
+  sendLightCmd('SCENE:' + val);
+}
+
+function sendLightBrightness(pct) {
+  sendLightCmd('BRIGHTNESS:' + (pct / 100).toFixed(2));
+}
+
+function sendLightGroup(group, rgbw) {
+  const ids = LIGHT_GROUPS[group] || [];
+  ids.forEach(id => sendLightCmd(`SET:${id}:${rgbw}`));
+  sendLightCmd('MODE:MANUAL');
+  document.getElementById('light-mode').value = 'MANUAL';
+}
+
+// gb16/light/status 수신 시 미니 프리뷰 업데이트
+function handleLightStatus(payload) {
+  let data;
+  try { data = JSON.parse(payload); } catch { return; }
+
+  // 모드/씬 셀렉트 동기화
+  const modeEl = document.getElementById('light-mode');
+  const sceneEl = document.getElementById('light-scene');
+  if (modeEl  && data.mode)  modeEl.value  = data.mode;
+  if (sceneEl && data.scene) sceneEl.value = data.scene;
+
+  // 밝기 슬라이더
+  const bv = Math.round((data.brightness || 1) * 100);
+  const slider = document.getElementById('light-brightness');
+  const bvEl   = document.getElementById('light-bv');
+  if (slider) slider.value = bv;
+  if (bvEl)   bvEl.textContent = bv + '%';
+
+  // RGBW 미니 뷰 (18개 컬러 박스)
+  const grid = document.getElementById('light-status-grid');
+  if (!grid || !data.channels) return;
+  grid.innerHTML = '';
+  for (let id = 1; id <= 18; id++) {
+    const ch = data.channels[String(id)];
+    if (!ch) continue;
+    const [r, g, b, w] = ch.rgbw;
+    const mixed_r = Math.min(255, r + w);
+    const mixed_g = Math.min(255, g + w);
+    const mixed_b = Math.min(255, b + w);
+    const box = document.createElement('div');
+    box.title = `L${id} ${ch.label}\nR${r} G${g} B${b} W${w}`;
+    box.style.cssText = `
+      height:14px; border-radius:3px;
+      background:rgb(${mixed_r},${mixed_g},${mixed_b});
+      border:1px solid #333;
+    `;
+    grid.appendChild(box);
+  }
+}
+
+// ── 오류 로그 ──────────────────────────────────────────────────────────────
+const errorLogEntries = [];
+const MAX_ERROR_LOG = 80;
+
+function logError(type, msg) {
+  const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  errorLogEntries.unshift({ ts, type, msg });
+  if (errorLogEntries.length > MAX_ERROR_LOG) errorLogEntries.pop();
+  renderErrorLog();
+}
+
+function renderErrorLog() {
+  const el = document.getElementById('error-log');
+  if (!el) return;
+  if (errorLogEntries.length === 0) {
+    el.innerHTML = '<span style="color:#444">오류 없음</span>';
+    return;
+  }
+  el.innerHTML = errorLogEntries.map(e =>
+    `<div class="err-${e.type}"><span class="err-time">[${e.ts}]</span>${e.msg}</div>`
+  ).join('');
+}
+
+function clearErrorLog() {
+  errorLogEntries.length = 0;
+  renderErrorLog();
+}
+
+function openFullErrorLog() {
+  const w = window.open('', '_blank', 'width=700,height=520,resizable=yes,scrollbars=yes');
+  if (!w) return;
+  const COLOR = { fault: '#f44336', error: '#ff7043', offline: '#ffd54f', online: '#69f0ae' };
+  const rows = errorLogEntries.length
+    ? errorLogEntries.map(e =>
+        `<div style="padding:2px 0;border-bottom:1px solid #1e2235;color:${COLOR[e.type]||'#aaa'}">`
+        + `<span style="color:#555;margin-right:6px">[${e.ts}]</span>${e.msg}</div>`
+      ).join('')
+    : '<div style="color:#555;padding:8px">오류 없음</div>';
+  w.document.write(
+    '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    + '<title>오류 로그 — GB16 2026 광주비엔날레</title>'
+    + '<style>body{margin:0;background:#080a14;color:#c8cfe8;font:0.72rem/1.7 monospace;padding:12px}'
+    + 'h2{font-size:0.82rem;font-weight:700;color:#f44336;margin:0 0 8px}'
+    + '.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}'
+    + 'button{font-size:0.68rem;padding:2px 10px;background:#1e2235;color:#aaa;border:1px solid #3a3d4a;border-radius:4px;cursor:pointer}'
+    + '</style></head><body>'
+    + '<div class="bar"><h2>⚠ 오류 로그 — 전체 (' + errorLogEntries.length + '건)</h2>'
+    + '<button onclick="window.close()">닫기</button></div>'
+    + rows
+    + '</body></html>'
+  );
+  w.document.close();
+}
+
+</script>
+
+<!-- ── 통계 모달 ──────────────────────────────────────────────────────────── -->
+<div id="stats-overlay" style="display:none;position:fixed;inset:0;background:#000a;z-index:1000;overflow-y:auto;">
+  <div style="max-width:980px;margin:24px auto;background:#13162a;border:1px solid #1e2235;border-radius:12px;padding:20px 24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h2 style="font-size:1rem;font-weight:700;color:#7eb8f7;">📊 전시 통계</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="stats-period" style="background:#1e2235;border:1px solid #2a3050;color:#c8cfe8;border-radius:4px;padding:4px 8px;font-size:0.78rem;">
+          <option value="hour">최근 1시간</option>
+          <option value="day" selected>오늘 (24h)</option>
+          <option value="week">이번 주 (7일)</option>
+          <option value="month">이번 달 (30일)</option>
+        </select>
+        <button onclick="loadStats()" style="padding:4px 12px;background:#7eb8f722;border:1px solid #7eb8f744;color:#7eb8f7;border-radius:4px;cursor:pointer;font-size:0.78rem;">새로고침</button>
+        <button onclick="closeStats()" style="padding:4px 10px;background:#f4433611;border:1px solid #f4433644;color:#f44336;border-radius:4px;cursor:pointer;font-size:0.82rem;">✕</button>
+      </div>
+    </div>
+
+    <!-- 요약 카드 -->
+    <div id="stats-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:18px;"></div>
+
+    <!-- 차트 영역 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
+        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:4px;">관람객 방문 빈도</div>
+        <div style="font-size:0.62rem;color:#444;margin-bottom:8px;">전체 = CAM1 ∪ CAM2 동일 공간 합산</div>
+        <canvas id="chart-audience" height="170"></canvas>
+      </div>
+      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
+        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:8px;">가열 사이클 횟수</div>
+        <canvas id="chart-heat-cycle" height="170"></canvas>
+      </div>
+    </div>
+
+    <!-- 로봇별 가열 시간 테이블 -->
+    <div style="margin-top:14px;background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
+      <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:10px;">로봇별 SMA 가열 시간 (누적)</div>
+      <div id="stats-heat-table" style="overflow-x:auto;"></div>
+    </div>
+
+    <!-- 하단: Fault + 사운드 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
+        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:8px;">고장 이력</div>
+        <div id="stats-fault" style="font-size:0.78rem;line-height:1.8;"></div>
+      </div>
+      <div style="background:#181b2e;border:1px solid #1e2235;border-radius:8px;padding:12px;">
+        <div style="font-size:0.72rem;color:#555;letter-spacing:1px;margin-bottom:8px;">사운드 재생 통계</div>
+        <div id="stats-sound" style="font-size:0.78rem;line-height:1.8;"></div>
+      </div>
+    </div>
+
+    <div id="stats-status" style="margin-top:10px;font-size:0.68rem;color:#444;text-align:right;"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+// ── 통계 모달 ──────────────────────────────────────────────────────────────
+// /api/stats 상대경로 사용 → 내부/외부/터널 어디서든 자동으로 동작
+const STATS_API = '/api/stats';
+let _chartAud   = null;
+let _chartCycle = null;
+let _chartCam1  = null;
+let _chartCam2  = null;
+
+function openStats() {
+  document.getElementById('stats-overlay').style.display = 'block';
+  loadStats();
+}
+function closeStats() {
+  document.getElementById('stats-overlay').style.display = 'none';
+}
+
+async function loadStats() {
+  const period = document.getElementById('stats-period').value;
+  const statusEl = document.getElementById('stats-status');
+  statusEl.textContent = '불러오는 중...';
+  try {
+    const res  = await fetch(`${STATS_API}?period=${period}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderStats(data);
+    statusEl.textContent = `마지막 업데이트: ${new Date().toLocaleTimeString('ko-KR', { hour12: false })}`;
+  } catch (e) {
+    statusEl.textContent = `⚠ API 오류: ${e.message} (bridge.py 실행 중이어야 합니다)`;
+  }
+}
+
+function _card(label, value, color) {
+  return `<div style="background:#1e2235;border:1px solid #2a3050;border-radius:8px;padding:10px 12px;">
+    <div style="font-size:0.68rem;color:#555;margin-bottom:4px;">${label}</div>
+    <div style="font-size:1.3rem;font-weight:700;color:${color || '#c8cfe8'};">${value}</div>
+  </div>`;
+}
+
+function renderStats(d) {
+  const aud = d.audience;
+  const totalHeatS = d.heat.by_robot.reduce((s, r) => s + r.total_s, 0);
+  const totalCycles = d.heat.by_robot.reduce((s, r) => s + r.heat_cycles, 0);
+  const faultTotal = d.faults.reduce((s, f) => s + f.count, 0);
+
+  // 요약 카드
+  document.getElementById('stats-summary').innerHTML = [
+    _card('총 방문 횟수',     aud.total_visits + '회',                         '#69f0ae'),
+    _card('CAM1 방문',        (aud.cam1 ? aud.cam1.total_visits : '-') + '회', '#69f0ae'),
+    _card('CAM2 방문',        (aud.cam2 ? aud.cam2.total_visits : '-') + '회', '#4fc3f7'),
+    _card('평균 체류 시간',   fmtDur(aud.avg_duration_s),                      '#4fc3f7'),
+    _card('총 가열 시간',     fmtDur(totalHeatS),                              '#ff9860'),
+    _card('가열 사이클',      totalCycles + '회',                              '#ffb74d'),
+    _card('고장 발생',        faultTotal + '건',   faultTotal ? '#f44336' : '#555'),
+    _card('사운드 재생',      d.sound.filter(s => s.action !== 'STOP').reduce((a,b)=>a+b.count,0) + '회', '#ffd54f'),
+  ].join('');
+
+  // 관람객 차트 (전체 + CAM1 + CAM2 같은 차트에 겹쳐서 표시)
+  const audCtx = document.getElementById('chart-audience').getContext('2d');
+  if (_chartAud) _chartAud.destroy();
+  _chartAud = new Chart(audCtx, {
+    type: 'bar',
+    data: {
+      labels: aud.labels,
+      datasets: [
+        { label: '전체 (CAM1∪CAM2)', data: aud.total_counts,
+          backgroundColor: '#c8cfe822', borderColor: '#c8cfe8', borderWidth: 2, type: 'line',
+          tension: 0.3, pointRadius: 2, fill: false, order: 1 },
+        { label: '🎥 CAM1 영역', data: aud.cam1 ? aud.cam1.counts : [],
+          backgroundColor: '#69f0ae55', borderColor: '#69f0ae', borderWidth: 1, order: 2 },
+        { label: '🎥 CAM2 영역', data: aud.cam2 ? aud.cam2.counts : [],
+          backgroundColor: '#4fc3f733', borderColor: '#4fc3f7', borderWidth: 1, order: 3 },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, labels: { color: '#888', font: { size: 10 }, boxWidth: 12 } }
+      },
+      scales: {
+        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' } },
+        y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // (구 cam1/cam2 개별 차트 — 통합 차트로 대체됨)
+
+  // 가열 사이클 차트
+  const cycCtx = document.getElementById('chart-heat-cycle').getContext('2d');
+  if (_chartCycle) _chartCycle.destroy();
+  _chartCycle = new Chart(cycCtx, {
+    type: 'bar',
+    data: {
+      labels: d.heat.labels,
+      datasets: [{ label: '사이클', data: d.heat.cycle_counts, backgroundColor: '#ff986055', borderColor: '#ff9860', borderWidth: 1 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' } },
+                y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1e2235' }, beginAtZero: true } } }
+  });
+
+  // 로봇별 가열 테이블
+  if (d.heat.by_robot.length === 0) {
+    document.getElementById('stats-heat-table').innerHTML = '<span style="color:#555">데이터 없음</span>';
+  } else {
+    const rows = d.heat.by_robot.map(r => {
+      const bar = Math.min(Math.round(r.total_s / 3600 * 100 / Math.max(...d.heat.by_robot.map(x => x.total_s / 3600), 1)), 100);
+      return `<tr>
+        <td style="color:#888;padding:3px 6px;white-space:nowrap;">${r.name}</td>
+        <td style="color:#ff9860;padding:3px 6px;text-align:right;">${fmtDur(r.heat_s)}</td>
+        <td style="color:#ffb74d;padding:3px 6px;text-align:right;">${fmtDur(r.sust_s)}</td>
+        <td style="color:#c8cfe8;padding:3px 6px;text-align:right;font-weight:600;">${fmtDur(r.total_s)}</td>
+        <td style="color:#555;padding:3px 6px;text-align:right;">${r.heat_cycles}회</td>
+        <td style="padding:3px 8px;min-width:80px;">
+          <div style="background:#1e2235;border-radius:3px;height:6px;">
+            <div style="width:${bar}%;background:#ff9860;border-radius:3px;height:100%;"></div>
+          </div></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('stats-heat-table').innerHTML =
+      `<table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+        <thead><tr style="color:#444;font-size:0.68rem;">
+          <th style="text-align:left;padding:2px 6px;">로봇</th>
+          <th style="text-align:right;padding:2px 6px;">HEAT</th>
+          <th style="text-align:right;padding:2px 6px;">SUST</th>
+          <th style="text-align:right;padding:2px 6px;">합계</th>
+          <th style="text-align:right;padding:2px 6px;">사이클</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // Fault 요약
+  document.getElementById('stats-fault').innerHTML = d.faults.length
+    ? d.faults.map(f => `<div><span style="color:#f44336;">R${String(f.robot_id).padStart(2,'0')}</span> code=${f.fault_code} — <b>${f.count}회</b></div>`).join('')
+    : '<span style="color:#555">고장 없음</span>';
+
+  // 사운드 요약
+  const soundMap = {};
+  d.sound.forEach(s => {
+    if (!soundMap[s.track]) soundMap[s.track] = {};
+    soundMap[s.track][s.action] = s.count;
+  });
+  const soundHtml = Object.entries(soundMap).map(([trk, acts]) => {
+    const plays = (acts['PLAY'] || 0) + (acts['LOOP'] || 0);
+    return `<div>트랙 <b style="color:#ffd54f;">${trk}</b> — 재생 ${plays}회 / 정지 ${acts['STOP'] || 0}회</div>`;
+  }).join('');
+  document.getElementById('stats-sound').innerHTML = soundHtml || '<span style="color:#555">데이터 없음</span>';
+}
+
+function fmtDur(sec) {
+  if (!sec || sec < 1) return '—';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// ESC로 닫기
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStats(); });
+document.getElementById('stats-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('stats-overlay')) closeStats();
+});
+
+function staggerStart() {
+  var interval = parseInt(prompt("그룹 간격 (초, 기본 20):", "20") || "20");
+  var grp      = parseInt(prompt("그룹 크기 (기본 5):", "5") || "5");
+  if (isNaN(interval) || isNaN(grp)) return;
+  if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
+  mqttClient.publish("gb16/all/cmd", "STAGGER_HEAT interval=" + interval + " group=" + grp, { qos: 1 });
+  logCmd("🎲 스태거드 시작 — " + interval + "s 간격 / " + grp + "대씩");
+}
+function staggerStop() {
+  if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
+  mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+  logCmd("⛔ 스태거드 중단");
+}
+</script>
+</body>
+</html>
