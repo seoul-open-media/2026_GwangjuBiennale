@@ -103,6 +103,17 @@ void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 2000) {}
 
+  // ─ MOSFET 핀 초기화 (I2C 이전에 모두 LOW로 설정)
+  for (uint8_t i = 0; i < MOSFET_COUNT; i++) {
+    pinMode(MOSFET_PINS[i], OUTPUT);
+    digitalWrite(MOSFET_PINS[i], LOW);
+  }
+  // PWM 주파수 설정
+  for (uint8_t i = 0; i < MOSFET_COUNT; i++) {
+    analogWriteFrequency(MOSFET_PINS[i], 10000u);
+    analogWrite(MOSFET_PINS[i], 0);
+  }
+
   // ─ XBee 초기화
   XBEE.begin(115200);
 
@@ -116,13 +127,6 @@ void setup() {
   Wire2.begin();  Wire2.setClock(50000);
   // Wire3.begin();  Wire3.setClock(400000);
   delay(50);
-
-  // ─ MOSFET 핀 초기화
-  for (uint8_t i = 0; i < MOSFET_COUNT; i++) {
-    pinMode(MOSFET_PINS[i], OUTPUT);
-    analogWriteFrequency(MOSFET_PINS[i], 10000u);
-    analogWrite(MOSFET_PINS[i], 0);
-  }
 
   // ─ OLED 초기화 — 배선 확인 후 주석 해제
   // oledOk = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
