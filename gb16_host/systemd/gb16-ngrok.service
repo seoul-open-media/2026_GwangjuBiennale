@@ -1,0 +1,18 @@
+[Unit]
+Description=GB16 2026 광주비엔날레 ngrok 터널
+After=network-online.target gb16-bridge.service
+Wants=network-online.target
+Requires=gb16-bridge.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host
+EnvironmentFile=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/.env
+ExecStart=/snap/bin/ngrok http --domain=${NGROK_DOMAIN} ${STATS_PORT}
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/ngrok.log
+StandardError=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/ngrok.log
+
+[Install]
+WantedBy=default.target

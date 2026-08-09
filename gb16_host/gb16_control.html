@@ -1078,12 +1078,12 @@ body {
   </div>
   <div class="ap-row">
     <span class="ap-label">내부망 제어</span>
-    <span class="ap-url" id="ap-local-ctrl">http://YOUR_GB16_IP_HERE:8182/gb16_control.html</span>
+    <span class="ap-url" id="ap-local-ctrl">http://192.168.0.18:8182/gb16_control.html</span>
     <button class="ap-copy" onclick="apCopy('ap-local-ctrl', this)">복사</button>
   </div>
   <div class="ap-row">
     <span class="ap-label">내부망 모니터</span>
-    <span class="ap-url" id="ap-local-dash">http://YOUR_GB16_IP_HERE:8182/dashboard.html</span>
+    <span class="ap-url" id="ap-local-dash">http://192.168.0.18:8182/dashboard.html</span>
     <button class="ap-copy" onclick="apCopy('ap-local-dash', this)">복사</button>
   </div>
 </div>
@@ -1111,12 +1111,12 @@ body {
         </div>
         <div class="man-url-row">
           <span class="man-url-label">🖥 내부 제어</span>
-          <span class="man-url-val" id="mu-loc-ctrl">http://YOUR_GB16_IP_HERE:8182/gb16_control.html</span>
+          <span class="man-url-val" id="mu-loc-ctrl">http://192.168.0.18:8182/gb16_control.html</span>
           <button class="man-copy-btn" onclick="manCopy('mu-loc-ctrl',this)">복사</button>
         </div>
         <div class="man-url-row">
           <span class="man-url-label">🖥 내부 모니터</span>
-          <span class="man-url-val" id="mu-loc-dash">http://YOUR_GB16_IP_HERE:8182/dashboard.html</span>
+          <span class="man-url-val" id="mu-loc-dash">http://192.168.0.18:8182/dashboard.html</span>
           <button class="man-copy-btn" onclick="manCopy('mu-loc-dash',this)">복사</button>
         </div>
         <div class="man-note">📲 외부 주소는 어디서나 접속 가능 (모바일 데이터 포함) · 🖥 내부 주소는 전시장 Wi-Fi에 연결된 경우에만 사용</div>
@@ -1299,7 +1299,7 @@ body {
           <label>팬 속도</label>
           <input type="range" id="if-fan" min="0" max="255" value="255"
             oninput="document.getElementById('if-fan-v').textContent=this.value">
-          <span class="param-val" id="if-fan-v">150</span>
+          <span class="param-val" id="if-fan-v">255</span>
         </div>
         <div class="param-row">
           <label>최저 온도</label>
@@ -1312,7 +1312,6 @@ body {
           <label for="if-loop">루프 반복</label>
         </div>
       </div>
-
       <!-- IF Ceiling 파라미터 -->
       <div id="params-ceil" style="display:none">
         <div class="param-row">
@@ -1350,7 +1349,7 @@ body {
     <div class="ctrl-section">
       <h3>명령</h3>
       <div class="cmd-btns">
-        <button class="cbtn heat"   onclick="sendSelected('HEAT_ON')">🔥 HEAT_ON</button>
+        <button class="cbtn heat"   onclick="sendSetAndHeatOn()">🔥 HEAT_ON</button>
         <button class="cbtn cool"   onclick="sendSelected('HEAT_OFF')">❄ HEAT_OFF</button>
         <button class="cbtn danger" onclick="sendSelectedConfirm('RESET')">⛔ RESET</button>
         <button class="cbtn cool"   onclick="sendSelected('FAN_ON speed='+activeFanVal())">💨 FAN_ON</button>
@@ -1608,12 +1607,12 @@ body {
 // ═══════════════════════════════════════════════════════════════════════════
 //  설정
 // ═══════════════════════════════════════════════════════════════════════════
-const BROKER     = 'ws://YOUR_GB16_IP_HERE:9001/mqtt';
+const BROKER     = 'ws://192.168.0.18:9001/mqtt';
 const BROKER_ALT = 'ws://localhost:9001/mqtt';
 const BROKER_EXT = 'wss://k890ff91.ala.asia-southeast1.emqxsl.com:8084/mqtt';  // 외부 접속용 (ngrok 경유)
 
 const mqttBrokerOverride = '';
-const mqttUser = 'gb16_host';
+const mqttUser = 'gb16_user';
 const mqttPass = 'som123';
 
 function toggleAccessPanel() {
@@ -1666,6 +1665,9 @@ const IF_IDS_A   = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];  // 비결정적 유�
 const IF_IDS_B   = [16,17,18,19,20,21,22,23,24,25,26,27,28,29,30];  // 비결정적 유영 B
 const IF_CEIL    = [31,32,33,34];    // IF Ceiling
 const GP_IDS     = [];                    // 미사용
+const GF_IDS     = [];                    // 미사용 (GB16)
+const GP1_IDS    = [];                    // 미사용 (GB16)
+const GP2_IDS    = [];                    // 미사용 (GB16)
 const IF_IDS     = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34];    // 전체 IF
 const ALL_IDS    = IF_IDS;
 const OFFLINE_TIMEOUT = 15000;  // ms
@@ -1940,7 +1942,7 @@ function switchParamTab(tab) {
   document.getElementById('tab-ceil').classList.toggle('active', tab === 'ceil');
 }
 
-function gpFanVal()    { return document.getElementById('gp-fan').value; }
+function gpFanVal()  { return document.getElementById('gp-fan').value; }
 function ifFanVal()    { return document.getElementById('if-fan').value; }
 function ceilFanVal()  { return document.getElementById('ceil-fan').value; }
 function activeFanVal(){ return paramTab === 'ceil' ? ceilFanVal() : ifFanVal(); }
@@ -1999,6 +2001,11 @@ function resolveTargets() {
   return selected.size > 0
     ? [...selected].sort((a, b) => a - b)
     : getAutoTargetIds();
+}
+
+function sendSetAndHeatOn() {
+  sendSet();           // 현재 슬라이더 값으로 파라미터 업데이트
+  sendSelected('HEAT_ON');  // 업데이트된 파라미터로 가열 시작
 }
 
 function sendSelected(cmd) {
@@ -2819,8 +2826,9 @@ function connectMqtt(useAlt) {
   const opts = {
     clientId,
     clean: true,
-    reconnectPeriod: 0,
-    connectTimeout: 8000,
+    keepalive: 30,
+    reconnectPeriod: 5000,
+    connectTimeout: 10000,
   };
   if (mqttUser) { opts.username = mqttUser; opts.password = mqttPass; }
   mqttClient = mqtt.connect(url, opts);
@@ -2828,8 +2836,8 @@ function connectMqtt(useAlt) {
   mqttClient.on('connect', () => {
     bar.style.color = '#69f0ae';
     bar.textContent = `✅ MQTT 연결됨 — ${broker}`;
-    mqttClient.subscribe('gb16/robot/+/log');   // 와일드카드 단일 구독 (18개 개별 구독 대신)
-    mqttClient.subscribe('gb16/robot/+/ack', { qos: 1 }); // CMD ACK
+    mqttClient.subscribe('gb16/robot/+/log');
+    mqttClient.subscribe('gb16/robot/+/ack', { qos: 1 });
     mqttClient.subscribe('audience/present');
     if (LIGHT_ENABLED) mqttClient.subscribe('gb16/light/status', { qos: 0 });
   });
@@ -2844,8 +2852,7 @@ function connectMqtt(useAlt) {
       handleLightStatus(_text);
       return;
     }
-    // CMD ACK 처리: gb16/robot/<id>/ack — TIMEOUT만 에러로그에 기록
-    const ackMatch = _topic.match(/^sma\/robot\/(\d+)\/ack$/);
+    const ackMatch = _topic.match(/^gb16\/robot\/(\d+)\/ack$/);
     if (ackMatch) {
       const rid = parseInt(ackMatch[1], 10);
       const rLabel = `R${String(rid).padStart(2,'0')}`;
@@ -2864,21 +2871,12 @@ function connectMqtt(useAlt) {
 
   mqttClient.on('close', () => {
     bar.style.color = '#ffd54f';
+    bar.textContent = `⚠ MQTT 연결 끊김 — 재연결 시도 중...`;
+  });
+
+  mqttClient.on('reconnect', () => {
+    bar.style.color = '#888';
     bar.textContent = `🔄 재연결 중... (${broker})`;
-    if (!isLocal()) {
-      // 외부 접속: HiveMQ로 재연결
-      setTimeout(() => { mqttClient.end(true); connectMqtt(false); }, 5000);
-    } else if (!usingAlt) {
-      setTimeout(() => {
-        mqttClient.end(true);
-        connectMqtt(true);
-      }, 3000);
-    } else {
-      setTimeout(() => {
-        mqttClient.end(true);
-        connectMqtt(false);
-      }, 5000);
-    }
   });
 }
 
@@ -2945,7 +2943,13 @@ _loadPdCue();        // Pd 큐 설정 복원
 initSchedule();      // 공연 일정 카운트다운 시작
 
 if (typeof mqtt !== 'undefined') {
-  connectMqtt(false);
+  const _dbgBar = document.getElementById('mqtt-status');
+  const _h = window.location.hostname;
+  const _isLoc = _h === '' || _h === 'localhost' || _h === '127.0.0.1' || /^192\.168\./.test(_h) || /^10\./.test(_h);
+  const _url = _isLoc ? BROKER : BROKER_EXT;
+  _dbgBar.textContent = `MQTT 시도: ${_url} (hostname=${_h})`;
+  console.log('[MQTT] url=', _url, 'isLocal=', _isLoc, 'hostname=', _h);
+  setTimeout(() => connectMqtt(false), 200);
 } else {
   document.getElementById('mqtt-status').textContent = '❌ mqtt.js 로드 실패 — 인터넷 연결 확인';
 }

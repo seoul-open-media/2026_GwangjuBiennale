@@ -54,7 +54,7 @@ echo "[..] dashboard.html 변환 중..."
 cp "$SRC_DIR/dashboard.html" "$SCRIPT_DIR/dashboard.html"
 sed -i \
     -e "s|sma/robot/|gb16/robot/|g" \
-    -e "s|sema_north|gb16_host|g" \
+    -e "s|sema_north|gb16_user|g" \
     -e "s|sema_ctrl_|gb16_ctrl_|g" \
     -e "s|192\.168\.50\.51|$GB16_HOST_IP|g" \
     -e "s|:${SEMA_STATS_PORT}/|:${STATS_API_PORT}/|g" \
@@ -147,7 +147,7 @@ sed -i \
     -e "s|sma/power/group/|gb16/power/group/|g" \
     -e "s|sma/light/cmd|gb16/light/cmd|g" \
     -e "s|sma/light/status|gb16/light/status|g" \
-    -e "s|sema_north|gb16_host|g" \
+    -e "s|sema_north|gb16_user|g" \
     -e "s|sema_ctrl_|gb16_ctrl_|g" \
     -e "s|sema_control\.html|gb16_control.html|g" \
     -e "s|SeMA 2026 North|GB16 2026 광주비엔날레|g" \

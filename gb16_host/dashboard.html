@@ -453,7 +453,7 @@
 </div>
 
 <script>
-const BROKER    = 'ws://YOUR_GB16_IP_HERE:9001/mqtt';   // 로컬 Mosquitto (내부망)
+const BROKER    = 'ws://192.168.0.18:9001/mqtt';   // 로컬 Mosquitto (내부망)
 const BROKER_ALT = 'ws://localhost:9001/mqtt';       // localhost 폴백
 const BROKER_EXT = 'wss://k890ff91.ala.asia-southeast1.emqxsl.com:8084/mqtt';  // 외부 접속용 (ngrok 경유)
 const ROBOT_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34];
@@ -786,7 +786,7 @@ function connectMqtt(useAlt) {
   } else {
     url = BROKER_EXT;
   }
-  const brokerLabel = isLocalNet ? (useAlt ? 'localhost:9001' : 'YOUR_GB16_IP_HERE:9001') : 'hivemq(ext)';
+  const brokerLabel = isLocalNet ? (useAlt ? 'localhost:9001' : '192.168.0.18:9001') : 'hivemq(ext)';
   bar.textContent = `MQTT 연결 중... (${brokerLabel})`;
   bar.className = '';
 
@@ -799,7 +799,7 @@ function connectMqtt(useAlt) {
 
   mqttClient = mqtt.connect(url, {
     clientId      : 'sma_web_' + Math.random().toString(16).slice(2),
-    username      : 'gb16_host',
+    username      : 'gb16_user',
     password      : 'som123',
     keepalive     : 30,
     connectTimeout: 10000,

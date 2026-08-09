@@ -73,7 +73,7 @@ if [ -n "$NGROK_DOMAIN" ] && [ "$NGROK_DOMAIN" != "YOUR_NGROK_DOMAIN_HERE" ]; th
     NGROK_PID=$!
     echo $NGROK_PID > "$LOG_DIR/ngrok.pid"
     echo "[OK] ngrok 시작 (PID $NGROK_PID)"
-    echo "     외부 URL: https://${NGROK_DOMAIN}/dashboard.html"
+    echo "     컨트롤 URL: https://${NGROK_DOMAIN}/gb16_control.html"
 else
     echo "[--] ngrok 도메인 미설정 — .env 에 NGROK_DOMAIN=... 추가하세요"
 fi
@@ -81,5 +81,6 @@ fi
 echo ""
 echo "═══════════════════════════════════════════════════"
 echo " 시작 완료  |  종료: $SCRIPT_DIR/stop.sh"
-[ -n "$NGROK_DOMAIN" ] && echo " 외부 URL : https://${NGROK_DOMAIN}/dashboard.html"
+echo " 로컬 URL  : http://localhost:${STATS_PORT}/gb16_control.html"
+[ -n "$NGROK_DOMAIN" ] && echo " 외부 URL  : https://${NGROK_DOMAIN}/gb16_control.html"
 echo "═══════════════════════════════════════════════════"
