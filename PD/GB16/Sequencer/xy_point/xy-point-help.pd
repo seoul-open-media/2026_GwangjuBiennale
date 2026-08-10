@@ -1,0 +1,53 @@
+#N struct 1004-rectangle float x float c;
+#N struct 1004-point float x0 float y0;
+#N struct 1004-pixel float x0 float y0 float x1 float y1;
+#N struct 1005-rectangle float x float c;
+#N struct 1005-point float x0 float y0;
+#N struct 1005-pixel float x0 float y0 float x1 float y1;
+#N struct 1006-rectangle float x float c;
+#N struct 1006-point float x0 float y0;
+#N struct 1006-pixel float x0 float y0 float x1 float y1;
+#N struct 1007-rectangle float x float c;
+#N struct 1007-point float x0 float y0;
+#N struct 1007-pixel float x0 float y0 float x1 float y1;
+#N canvas 866 180 852 998 10;
+#X floatatom 78 477 5 0 0 0 y - -, f 5;
+#X floatatom 11 478 5 0 0 0 x - -, f 5;
+#X obj 11 456 unpack f f;
+#X obj 11 24 nbx 5 14 -1e+037 1e+037 0 1 empty empty color 0 -8 0 10
+-262144 -1 -1 40 256;
+#X obj 426 456 unpack f f;
+#X obj 426 24 nbx 5 14 -1e+037 1e+037 0 1 empty empty color 0 -8 0
+10 -262144 -1 -1 49 256;
+#X obj 11 945 unpack f f;
+#X obj 11 513 nbx 5 14 -1e+037 1e+037 0 1 empty empty color 0 -8 0
+10 -262144 -1 -1 103 256;
+#X obj 426 945 unpack f f;
+#X obj 426 513 nbx 5 14 -1e+037 1e+037 0 1 empty empty color 0 -8 0
+10 -262144 -1 -1 500 256;
+#X floatatom 493 477 5 0 0 0 y - -, f 5;
+#X floatatom 426 478 5 0 0 0 x - -, f 5;
+#X floatatom 78 966 5 0 0 0 y - -, f 5;
+#X floatatom 11 967 5 0 0 0 x - -, f 5;
+#X floatatom 493 966 5 0 0 0 y - -, f 5;
+#X floatatom 426 967 5 0 0 0 x - -, f 5;
+#X obj 11 41 xy-point 410 410 2;
+#X obj 426 41 xy-point 410 410 2;
+#X obj 426 530 xy-point 410 410 2;
+#X obj 11 530 xy-point 410 410 2;
+#X connect 2 0 1 0;
+#X connect 2 1 0 0;
+#X connect 3 0 16 0;
+#X connect 4 0 11 0;
+#X connect 4 1 10 0;
+#X connect 5 0 17 0;
+#X connect 6 0 13 0;
+#X connect 6 1 12 0;
+#X connect 7 0 19 0;
+#X connect 8 0 15 0;
+#X connect 8 1 14 0;
+#X connect 9 0 18 0;
+#X connect 16 0 2 0;
+#X connect 17 0 4 0;
+#X connect 18 0 8 0;
+#X connect 19 0 6 0;

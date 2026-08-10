@@ -1,0 +1,5 @@
+{
+    "platformio-ide.useBuiltinPIOCore": true,
+    "platformio-ide.customPATH": "/home/allmedia/.local/share/pio-python3.11-venv/bin:/home/allmedia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "platformio-ide.useBuiltinPython": false
+}

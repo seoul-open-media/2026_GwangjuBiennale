@@ -1,0 +1,9 @@
+#N canvas 0 0 1540 309 12;
+#X text 835 118 repetition = 0 continue the loop until other player plays;
+#X text 835 61 Arguments : \$1 minute \$2 second \$3 sequence number \$4 number of repetition, f 63;
+#X text 836 143 In case of sequential playback \, set time 0 and connect right outlet to the next player's inlet, f 63;
+#X obj 60 96 bng 20 250 50 0 empty empty empty 0 -10 0 12 #fcfcfc #000000 #000000;
+#X obj 60 125 seq_player 0 0 1 1;
+#X obj 420 124 seq_player 0 0 2 1;
+#X connect 3 0 4 0;
+#X connect 4 1 5 0;

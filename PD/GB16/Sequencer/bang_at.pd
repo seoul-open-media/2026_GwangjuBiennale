@@ -1,0 +1,15 @@
+#N canvas 311 199 1001 611 12;
+#X floatatom 201 65 5 0 0 1 show_timer show_timer -;
+#X obj 326 81 \$1;
+#X obj 324 55 loadbang;
+#X obj 274 154 ==;
+#X obj 274 184 sel 1;
+#X obj 267 215 bng 20 250 50 0 empty empty empty 0 -10 0 12 -262144
+-1 -1;
+#X obj 252 255 outlet;
+#X connect 0 0 3 0;
+#X connect 1 0 3 1;
+#X connect 2 0 1 0;
+#X connect 3 0 4 0;
+#X connect 4 0 5 0;
+#X connect 5 0 6 0;

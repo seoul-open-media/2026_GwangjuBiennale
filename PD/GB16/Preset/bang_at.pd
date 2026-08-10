@@ -1,0 +1,8 @@
+#N canvas 248 78 350 213 12;
+#X floatatom 26 19 5 0 0 1 sec. global_sec - 0;
+#X obj 27 67 outlet;
+#X obj 26 42 sel \$1;
+#X floatatom 94 8 5 0 0 0 - sec_global - 0;
+#X connect 0 0 2 0;
+#X connect 2 0 1 0;
+#X connect 3 0 2 0;

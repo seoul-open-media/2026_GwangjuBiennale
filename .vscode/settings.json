@@ -1,0 +1,5 @@
+{
+  "platformio-ide.useBuiltinPython": false,
+  "platformio-ide.useBuiltinPIOCore": false,
+  "platformio-ide.customPATH": "/home/allmedia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+}
