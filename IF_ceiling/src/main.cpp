@@ -34,7 +34,7 @@ uint8_t       swState    = 0;    // 현재 스위치 상태
 unsigned long swMs       = 0;    // 스위치 마지막 변경 시각
 bool          swEverSeen = false; // 스위치가 한 번이라도 감지된 적 있는지
 unsigned long coolAmbMs   = 0;        // 저점 도달 감지 시각 (0=미도달)
-static const uint32_t COOL_EXTRA_MS = 60000UL; // 저점 도달 후 추가 쿨링 60초
+static const uint32_t COOL_EXTRA_MS = 0UL; // 저점 도달 즉시 재가열/정지 전환
 
 // ── 프리셋 활성 상태 ────────────────────────────────────────────
 uint8_t       presetActive    = 0;      // 현재 실행 중인 프리셋 (0=없음)

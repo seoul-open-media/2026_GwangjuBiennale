@@ -1264,8 +1264,7 @@ body {
       <h3>그룹 선택</h3>
       <div class="group-btns">
         <button class="gbtn" onclick="selectGroup('all')">전체 34</button>
-        <button class="gbtn" onclick="selectGroup('ifa')">유영 A (1-15)</button>
-        <button class="gbtn" onclick="selectGroup('ifb')">유영 B (16-30)</button>
+        <button class="gbtn" onclick="selectGroup('if')">유영 전체 (1-30)</button>
         <button class="gbtn" onclick="selectGroup('ceil')">천장 (31-34)</button>
         <button class="gbtn" onclick="selectGroup('none')">해제</button>
       </div>
@@ -1371,69 +1370,6 @@ body {
         <button class="pbtn if" onclick="sendSelected('PRESET:3')">3</button>
         <button class="pbtn if" onclick="sendSelected('PRESET:4')">4</button>
       </div>
-    </div>
-
-    <!-- 사운드 -->
-    <div class="ctrl-section">
-      <h3>사운드</h3>
-      <div class="loop-toggle">
-        <button class="loop-btn" id="btnLoop" onclick="setLoopMode(1)">↻ 반복</button>
-        <button class="loop-btn active" id="btnOnce" onclick="setLoopMode(0)">▷ 한번</button>
-      </div>
-      <div class="sound-btns">
-        <button class="sndbtn" onclick="sendAllSound(1)">♪ 1</button>
-        <button class="sndbtn" onclick="sendAllSound(2)">♪ 2</button>
-        <button class="sndbtn" onclick="sendAllSound(3)">♪ 3</button>
-        <button class="sndbtn" onclick="sendAllSound(4)">♪ 4</button>
-        <button class="sndbtn sndbtn-stop" onclick="sendAllSound(0)" title="10초 페이드아웃 후 정지">■ STOP</button>
-      </div>
-      <div class="vol-row">
-        <label>토탈 볼륨</label>
-        <input type="range" id="volSlider" min="1" max="100" value="70"
-               oninput="document.getElementById('volVal').textContent=this.value"
-               onchange="sendAllVolume(this.value)">
-        <span class="vol-val" id="volVal">70</span>
-      </div>
-    </div>
-
-    <!-- 전원 제어 -->
-    <div class="ctrl-section">
-      <h3>⚡ 전원 제어</h3>
-      <div class="pwr-grid">
-        <div class="pwr-row">
-          <span class="pwr-id">1</span><span class="pwr-name">비결정적 유영 A</span>
-          <div class="pwr-btns">
-            <button class="pbr btn-on"  onclick="sendPower(1,'on')">ON</button>
-            <button class="pbr btn-off" onclick="sendPower(1,'off')">OFF</button>
-            <button class="pbr btn-rst" onclick="sendPower(1,'reset')">↺</button>
-          </div>
-        </div>
-        <div class="pwr-row">
-          <span class="pwr-id">2</span><span class="pwr-name">비결정적 유영 B</span>
-          <div class="pwr-btns">
-            <button class="pbr btn-on"  onclick="sendPower(2,'on')">ON</button>
-            <button class="pbr btn-off" onclick="sendPower(2,'off')">OFF</button>
-            <button class="pbr btn-rst" onclick="sendPower(2,'reset')">↺</button>
-          </div>
-        </div>
-        <div class="pwr-row">
-          <span class="pwr-id">3</span><span class="pwr-name">IF Ceiling</span>
-          <div class="pwr-btns">
-            <button class="pbr btn-on"  onclick="sendPower(3,'on')">ON</button>
-            <button class="pbr btn-off" onclick="sendPower(3,'off')">OFF</button>
-            <button class="pbr btn-rst" onclick="sendPower(3,'reset')">↺</button>
-          </div>
-        </div>
-        <div class="pwr-row">
-          <span class="pwr-id">4</span><span class="pwr-name">기타</span>
-          <div class="pwr-btns">
-            <button class="pbr btn-on"  onclick="sendPower(4,'on')">ON</button>
-            <button class="pbr btn-off" onclick="sendPower(4,'off')">OFF</button>
-            <button class="pbr btn-rst" onclick="sendPower(4,'reset')">↺</button>
-          </div>
-        </div>
-      </div>
-      <div id="pwr-log"></div>
     </div>
 
     <!-- 명령 로그 -->
@@ -1953,11 +1889,12 @@ function activeFanVal(){ return paramTab === 'ceil' ? ceilFanVal() : ifFanVal();
 function selectGroup(group) {
   selected.clear();
   if      (group === 'all')  ALL_IDS.forEach(id => selected.add(id));
+  else if (group === 'if')   IF_IDS_A.concat(IF_IDS_B).forEach(id => selected.add(id));
+  else if (group === 'ceil') IF_CEIL.forEach(id => selected.add(id));
   else if (group === 'gf')   GF_IDS.forEach(id => selected.add(id));
   else if (group === 'gp1')  GP1_IDS.forEach(id => selected.add(id));
   else if (group === 'gp2')  GP2_IDS.forEach(id => selected.add(id));
   else if (group === 'gp')   GP_IDS.forEach(id => selected.add(id));
-  else if (group === 'if')   IF_IDS.forEach(id => selected.add(id));
   updateSelCount();
   renderAll();
 }
@@ -1971,15 +1908,11 @@ function toggleSelect(id) {
 }
 
 function updateSelCount() {
-  const gfSel  = GF_IDS.filter(id => selected.has(id));
-  const gp1Sel = GP1_IDS.filter(id => selected.has(id));
-  const gp2Sel = GP2_IDS.filter(id => selected.has(id));
-  const ifSel  = IF_IDS.filter(id => selected.has(id));
+  const swimSel = IF_IDS_A.concat(IF_IDS_B).filter(id => selected.has(id));
+  const ceilSel = IF_CEIL.filter(id => selected.has(id));
   const parts = [];
-  if (gfSel.length)  parts.push(`꽃 ${gfSel.length}대`);
-  if (gp1Sel.length) parts.push(`꽃잎1 ${gp1Sel.length}대`);
-  if (gp2Sel.length) parts.push(`꽃잎2 ${gp2Sel.length}대`);
-  if (ifSel.length)  parts.push(`비결정 ${ifSel.length}대`);
+  if (swimSel.length) parts.push(`유영 ${swimSel.length}대`);
+  if (ceilSel.length) parts.push(`천장 ${ceilSel.length}대`);
   document.getElementById('sel-count').textContent =
     parts.length ? `선택: ${parts.join(', ')} (총 ${selected.size}대)` : '선택: 없음';
 }

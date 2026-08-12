@@ -13,7 +13,7 @@
 #define SW_PIN      8   // 리드스위치 (INPUT_PULLUP) — SMA 수축 시 자석 감지
 
 // ── PWM ─────────────────────────────────────────────────────────────
-#define SMA_PWM_MAX     100          // (255 기준) — 전원부 부담 경감
+#define SMA_PWM_MAX      60          // (255 기준) — 스태거드 포함 운전 전류 추가 저감
 #define SMA_PWM_FREQ    100u         // 100 Hz — 스위칭 EMI 최소화 (초지향성 스피커 노이즈 저감)
 #define FAN_PWM_FREQ  15000u         // 15 kHz (팬은 가청 노이즈 방지 위해 고주파 유지)
 #define SMA_STAGGER_MS   0u          // 그룹 동시 점화 (0 = 딜레이 없음)
