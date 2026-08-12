@@ -1,0 +1,4 @@
+#N canvas 1193 198 450 300 12;
+#X obj 127 157 comport 32 9600;
+#X msg 148 81 49;
+#X connect 1 0 0 0;
