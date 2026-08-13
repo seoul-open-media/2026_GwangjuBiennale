@@ -930,63 +930,91 @@ _stagger_thread: threading.Thread | None = None
 
 
 def _run_stagger(ids: list, interval_s: int, group_size: int,
-                 fan_speed: int | None, heat_pwm: int | None, client) -> None:
+                 fan_speed: int | None, heat_pwm: int | None,
+                 repeat: bool, cycle_delay_s: int, client) -> None:
     """랜덤 순서로 group_size개씩 interval_s초 간격으로 IF HEAT_ON 전송."""
-    shuffled = ids[:]
-    random.shuffle(shuffled)
-    groups = [shuffled[i:i + group_size] for i in range(0, len(shuffled), group_size)]
-    n = len(groups)
     log.info(
-        f"[STAGGER] 시작 — {len(ids)}대 / {n}그룹 / {interval_s}s 간격"
+        f"[STAGGER] 시작 — {len(ids)}대 / {interval_s}s 간격"
+        f" / group={group_size} / repeat={'on' if repeat else 'off'}"
+        f" / cycle={cycle_delay_s}s"
         f" / fan={fan_speed if fan_speed is not None else 'keep'}"
         f" / pwm={heat_pwm if heat_pwm is not None else 'keep'}"
     )
-    client.publish(
-        f"{TOPIC_PREFIX}/stagger/status",
-        json.dumps({"event": "start", "total_groups": n,
-                    "interval_s": interval_s, "group_size": group_size,
-                    "fan": fan_speed, "pwm": heat_pwm}),
-        qos=0,
-    )
-    for i, group in enumerate(groups):
-        if _stagger_stop.is_set():
-            log.info(f"[STAGGER] 중단 — 그룹 {i + 1}/{n} 직전")
+    cycle_index = 0
+    while not _stagger_stop.is_set():
+        cycle_index += 1
+        shuffled = ids[:]
+        random.shuffle(shuffled)
+        groups = [shuffled[i:i + group_size] for i in range(0, len(shuffled), group_size)]
+        n = len(groups)
+        client.publish(
+            f"{TOPIC_PREFIX}/stagger/status",
+            json.dumps({"event": "start", "cycle": cycle_index, "total_groups": n,
+                        "interval_s": interval_s, "group_size": group_size,
+                        "repeat": repeat, "cycle_delay_s": cycle_delay_s,
+                        "fan": fan_speed, "pwm": heat_pwm}),
+            qos=0,
+        )
+
+        for i, group in enumerate(groups):
+            if _stagger_stop.is_set():
+                log.info(f"[STAGGER] 중단 — cycle {cycle_index} 그룹 {i + 1}/{n} 직전")
+                client.publish(
+                    f"{TOPIC_PREFIX}/stagger/status",
+                    json.dumps({"event": "stopped", "cycle": cycle_index,
+                                "group": i + 1, "total": n}),
+                    qos=0,
+                )
+                return
+            for rid in group:
+                if fan_speed is not None or heat_pwm is not None:
+                    set_parts = []
+                    if fan_speed is not None:
+                        set_parts.append(f"fan={fan_speed}")
+                    if heat_pwm is not None:
+                        set_parts.append(f"pwm={heat_pwm}")
+                    fwd_sock.sendto(
+                        f"{rid};SET {' '.join(set_parts)}\n".encode(),
+                        (UDP_FORWARD_IP, UDP_FORWARD_PORT),
+                    )
+                fwd_sock.sendto(
+                    f"{rid};HEAT_ON\n".encode(),
+                    (UDP_FORWARD_IP, UDP_FORWARD_PORT),
+                )
+            log.info(f"[STAGGER] cycle {cycle_index} 그룹 {i + 1}/{n}: {group} → HEAT_ON")
             client.publish(
                 f"{TOPIC_PREFIX}/stagger/status",
-                json.dumps({"event": "stopped", "group": i + 1, "total": n}),
+                json.dumps({"event": "group", "cycle": cycle_index,
+                            "group": i + 1, "total": n, "ids": group}),
+                qos=0,
+            )
+            if i < n - 1:
+                _stagger_stop.wait(interval_s)   # 인터럽트 가능한 sleep
+
+        if not repeat:
+            log.info("[STAGGER] 완료")
+            client.publish(
+                f"{TOPIC_PREFIX}/stagger/status",
+                json.dumps({"event": "done", "cycle": cycle_index, "total_groups": n}),
                 qos=0,
             )
             return
-        for rid in group:
-            if fan_speed is not None or heat_pwm is not None:
-                set_parts = []
-                if fan_speed is not None:
-                    set_parts.append(f"fan={fan_speed}")
-                if heat_pwm is not None:
-                    set_parts.append(f"pwm={heat_pwm}")
-                fwd_sock.sendto(
-                    f"{rid};SET {' '.join(set_parts)}\n".encode(),
-                    (UDP_FORWARD_IP, UDP_FORWARD_PORT),
-                )
-            fwd_sock.sendto(
-                f"{rid};HEAT_ON\n".encode(),
-                (UDP_FORWARD_IP, UDP_FORWARD_PORT),
+
+        log.info(f"[STAGGER] cycle {cycle_index} 완료 — 다음 cycle 대기 {cycle_delay_s}s")
+        client.publish(
+            f"{TOPIC_PREFIX}/stagger/status",
+            json.dumps({"event": "cycle_done", "cycle": cycle_index,
+                        "next_in_s": cycle_delay_s}),
+            qos=0,
+        )
+        if _stagger_stop.wait(cycle_delay_s):
+            log.info(f"[STAGGER] 중단 — cycle {cycle_index} 완료 후")
+            client.publish(
+                f"{TOPIC_PREFIX}/stagger/status",
+                json.dumps({"event": "stopped", "cycle": cycle_index, "group": n, "total": n}),
+                qos=0,
             )
-        log.info(f"[STAGGER] 그룹 {i + 1}/{n}: {group} → HEAT_ON")
-        client.publish(
-            f"{TOPIC_PREFIX}/stagger/status",
-            json.dumps({"event": "group", "group": i + 1, "total": n, "ids": group}),
-            qos=0,
-        )
-        if i < n - 1:
-            _stagger_stop.wait(interval_s)   # 인터럽트 가능한 sleep
-    if not _stagger_stop.is_set():
-        log.info("[STAGGER] 완료")
-        client.publish(
-            f"{TOPIC_PREFIX}/stagger/status",
-            json.dumps({"event": "done", "total_groups": n}),
-            qos=0,
-        )
+            return
 
 
 # ═══════════════════════════════════════════════════════
@@ -1044,14 +1072,19 @@ def on_message(client, userdata, message):
             if upper.startswith('STAGGER_HEAT'):
                 toks = payload.split()
                 interval, group_size = 20, 5
+                repeat, cycle_delay = False, 10
                 fan_speed, heat_pwm = None, None
                 for tok in toks[1:]:
                     k, _, v = tok.lower().partition('=')
                     try:
                         if k == 'interval': interval   = max(1, int(v))
                         elif k == 'group':  group_size = max(1, int(v))
+                        elif k in ('repeat', 'loop'):
+                            repeat = v in ('1', 'true', 'on', 'yes', 'y')
+                        elif k == 'cycle':
+                            cycle_delay = max(0, min(600, int(v)))
                         elif k == 'fan':    fan_speed  = max(0, min(255, int(v)))
-                        elif k == 'pwm':    heat_pwm   = max(0, min(255, int(v)))
+                        elif k == 'pwm':    heat_pwm   = max(0, min(100, int(v)))
                     except ValueError:
                         pass
                 _stagger_stop.set()
@@ -1060,12 +1093,14 @@ def on_message(client, userdata, message):
                 _stagger_stop.clear()
                 _stagger_thread = threading.Thread(
                     target=_run_stagger,
-                    args=(IF_STAGGER_IDS, interval, group_size, fan_speed, heat_pwm, client),
+                    args=(IF_STAGGER_IDS, interval, group_size, fan_speed, heat_pwm,
+                          repeat, cycle_delay, client),
                     daemon=True,
                 )
                 _stagger_thread.start()
                 log.info(
                     f"[STAGGER] 요청 interval={interval}s group={group_size}"
+                    f" repeat={'on' if repeat else 'off'} cycle={cycle_delay}s"
                     f" fan={fan_speed if fan_speed is not None else 'keep'}"
                     f" pwm={heat_pwm if heat_pwm is not None else 'keep'}"
                 )

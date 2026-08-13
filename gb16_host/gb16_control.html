@@ -1357,6 +1357,46 @@ body {
         <button class="cbtn" style="background:#7b4fc8;color:#fff" onclick="staggerStart()">🎲 스태거드 시작</button>
         <button class="cbtn" onclick="staggerStop()">⏹ 스태거드 중단</button>
       </div>
+      <div style="margin-top:8px;border-top:1px solid #1e2235;padding-top:8px">
+        <div style="font-size:0.68rem;color:#777;margin-bottom:6px">스태거드 옵션</div>
+        <div class="param-row">
+          <label>간격(s)</label>
+          <input type="number" id="stg-interval" min="1" max="300" value="20">
+          <span class="param-val"></span>
+        </div>
+        <div class="param-row">
+          <label>그룹 수</label>
+          <input type="number" id="stg-group" min="1" max="30" value="5">
+          <span class="param-val"></span>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="stg-repeat">
+          <label for="stg-repeat">스태거드 사이클 반복</label>
+        </div>
+        <div class="param-row">
+          <label>사이클 대기(s)</label>
+          <input type="number" id="stg-cycle-delay" min="0" max="600" value="10">
+          <span class="param-val"></span>
+        </div>
+        <div class="param-row">
+          <label>팬 속도</label>
+          <input type="number" id="stg-fan" min="0" max="255" value="255">
+          <span class="param-val"></span>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="stg-use-fan" checked>
+          <label for="stg-use-fan">스태거드 시작 시 fan 적용</label>
+        </div>
+        <div class="param-row">
+          <label>PWM</label>
+          <input type="number" id="stg-pwm" min="0" max="100" value="100">
+          <span class="param-val"></span>
+        </div>
+        <div class="check-row" style="margin-bottom:0">
+          <input type="checkbox" id="stg-use-pwm" checked>
+          <label for="stg-use-pwm">스태거드 시작 시 pwm 적용</label>
+        </div>
+      </div>
     </div>
 
     <!-- 프리셋 -->
@@ -3064,12 +3104,36 @@ function openFullErrorLog() {
 
 
 function staggerStart() {
-  var interval = parseInt(prompt("그룹 간격 (초, 기본 20):", "20") || "20");
-  var grp      = parseInt(prompt("그룹 크기 (기본 5):", "5") || "5");
-  if (isNaN(interval) || isNaN(grp)) return;
+  var interval = parseInt((document.getElementById('stg-interval') || {}).value || "20");
+  var grp      = parseInt((document.getElementById('stg-group') || {}).value || "5");
+  var repeat   = !!((document.getElementById('stg-repeat') || {}).checked);
+  var cycleDelay = parseInt((document.getElementById('stg-cycle-delay') || {}).value || "10");
+  var useFan   = !!((document.getElementById('stg-use-fan') || {}).checked);
+  var usePwm   = !!((document.getElementById('stg-use-pwm') || {}).checked);
+  var fan      = parseInt((document.getElementById('stg-fan') || {}).value || "255");
+  var pwm      = parseInt((document.getElementById('stg-pwm') || {}).value || "100");
+
+  if (isNaN(interval) || interval < 1) interval = 20;
+  if (isNaN(grp) || grp < 1) grp = 5;
+  if (isNaN(cycleDelay) || cycleDelay < 0) cycleDelay = 10;
+  if (isNaN(fan)) fan = 255;
+  if (isNaN(pwm)) pwm = 100;
+  cycleDelay = Math.min(600, cycleDelay);
+  fan = Math.max(0, Math.min(255, fan));
+  pwm = Math.max(0, Math.min(100, pwm));
+
   if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
-  mqttClient.publish("gb16/all/cmd", "STAGGER_HEAT interval=" + interval + " group=" + grp, { qos: 1 });
-  logCmd("🎲 스태거드 시작 — " + interval + "s 간격 / " + grp + "대씩");
+
+  var payload = "STAGGER_HEAT interval=" + interval + " group=" + grp;
+  if (repeat) payload += " repeat=1 cycle=" + cycleDelay;
+  if (useFan) payload += " fan=" + fan;
+  if (usePwm) payload += " pwm=" + pwm;
+
+  mqttClient.publish("gb16/all/cmd", payload, { qos: 1 });
+  logCmd("🎲 스태거드 시작 — " + interval + "s / " + grp + "대"
+    + (repeat ? (" / repeat on(" + cycleDelay + "s)") : " / repeat off")
+    + (useFan ? (" / fan=" + fan) : " / fan=keep")
+    + (usePwm ? (" / pwm=" + pwm) : " / pwm=keep"));
 }
 function staggerStop() {
   if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
