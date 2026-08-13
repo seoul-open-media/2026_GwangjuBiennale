@@ -47,9 +47,9 @@ static const uint8_t SOL_PINS[6] = { 2, 3, 4, 5, 6, 7 };
 #define SOL_PULSE_MS    200      // 솔레노이드 펄스 시간 (ms)
 #define SOL_STAGGER_MS   60      // 그룹 트리거 시 솔레노이드 시작 간격 (ms)
 #define WAIT_MS        5000      // 솔레노이드 OFF 후 서보 동작까지 대기 (ms)
-#define SWEEP_UP_MS    1000      // 서보 2500→1750 sweep 시간 (ms)
-#define HOLD_MS         500      // 도미노 세운 후 유지 시간 (ms)
-#define SWEEP_DN_MS    1000      // 서보 1750→2500 복귀 시간 (ms)
+#define SWEEP_UP_MS    1500      // 서보 2500→1750 sweep 시간 (ms)
+#define HOLD_MS        1000      // 도미노 세운 후 유지 시간 (ms)
+#define SWEEP_DN_MS     500      // 서보 1750→2500 복귀 시간 (ms)
 
 // ── 상태 머신 ────────────────────────────────────────────────────────
 enum DominoState : uint8_t {
@@ -71,8 +71,14 @@ static Domino dominos[6];
 static Adafruit_PWMServoDriver pwm(PCA9685_ADDR);
 
 // ── 서보 쓰기 ────────────────────────────────────────────────────────
+inline uint16_t clampServoUs(uint16_t us) {
+  const uint16_t low  = (SERVO_HOME < SERVO_RAISED) ? SERVO_HOME : SERVO_RAISED;
+  const uint16_t high = (SERVO_HOME > SERVO_RAISED) ? SERVO_HOME : SERVO_RAISED;
+  return constrain(us, low, high);
+}
+
 inline void servoWrite(uint8_t ch, uint16_t us) {
-  pwm.writeMicroseconds(ch, us);
+  pwm.writeMicroseconds(ch, clampServoUs(us));
 }
 
 inline void servoWriteDomino(uint8_t dominoIdx, uint16_t us) {
