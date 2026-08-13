@@ -78,28 +78,28 @@ void runPreset(uint8_t n) {
       Serial.println("[PRESET 2] 유영");
       presetActive = 0;
       cmd.tempTarget=40; cmd.sustainSec=15; cmd.fanSpeed=150;
-      cmd.fanOnly=false; cmd.targetTempMin=0; cmd.loopOn=true;
+      cmd.fanOnly=false; cmd.targetTempMin=0; cmd.heatPwm=0; cmd.loopOn=true;
       enterState(HEATING);
       break;
     case 3:
       Serial.println("[PRESET 3] 느린 유영");
       presetActive = 0;
       cmd.tempTarget=36; cmd.sustainSec=40; cmd.fanSpeed=100;
-      cmd.fanOnly=false; cmd.targetTempMin=0; cmd.loopOn=true;
+      cmd.fanOnly=false; cmd.targetTempMin=0; cmd.heatPwm=0; cmd.loopOn=true;
       enterState(HEATING);
       break;
     case 4:
       Serial.println("[PRESET 4] 힘찬 유영");
       presetActive = 0;
       cmd.tempTarget=43; cmd.sustainSec=5; cmd.fanSpeed=255;
-      cmd.fanOnly=false; cmd.targetTempMin=0; cmd.loopOn=true;
+      cmd.fanOnly=false; cmd.targetTempMin=0; cmd.heatPwm=0; cmd.loopOn=true;
       enterState(HEATING);
       break;
     case 5:
       Serial.println("[PRESET 5] 숨고르기");
       presetActive = 0;
       cmd.tempTarget=38; cmd.sustainSec=30; cmd.fanSpeed=120;
-      cmd.fanOnly=false; cmd.targetTempMin=26; cmd.loopOn=true;
+      cmd.fanOnly=false; cmd.targetTempMin=26; cmd.heatPwm=0; cmd.loopOn=true;
       enterState(HEATING);
       break;
     default: break;
@@ -198,6 +198,7 @@ void loop() {
   // ── 새 커맨드 처리 ───────────────────────────────────────────────
   if (newCmd) {
     newCmd = false;
+    setSmaPwm(cmd.heatPwm);
     if (cmd.sound > 0) sendSound(cmd.sound);
     // ── 프리셋 모드 (mode=2) ──────────────────────────────────
     if (cmd.mode == 2) {

@@ -929,17 +929,23 @@ _stagger_stop   = threading.Event()
 _stagger_thread: threading.Thread | None = None
 
 
-def _run_stagger(ids: list, interval_s: int, group_size: int, client) -> None:
-    """랜덤 순서로 group_size개씩 interval_s초 간격으로 HEAT_ON 전송."""
+def _run_stagger(ids: list, interval_s: int, group_size: int,
+                 fan_speed: int | None, heat_pwm: int | None, client) -> None:
+    """랜덤 순서로 group_size개씩 interval_s초 간격으로 IF HEAT_ON 전송."""
     shuffled = ids[:]
     random.shuffle(shuffled)
     groups = [shuffled[i:i + group_size] for i in range(0, len(shuffled), group_size)]
     n = len(groups)
-    log.info(f"[STAGGER] 시작 — {len(ids)}대 / {n}그룹 / {interval_s}s 간격")
+    log.info(
+        f"[STAGGER] 시작 — {len(ids)}대 / {n}그룹 / {interval_s}s 간격"
+        f" / fan={fan_speed if fan_speed is not None else 'keep'}"
+        f" / pwm={heat_pwm if heat_pwm is not None else 'keep'}"
+    )
     client.publish(
         f"{TOPIC_PREFIX}/stagger/status",
         json.dumps({"event": "start", "total_groups": n,
-                    "interval_s": interval_s, "group_size": group_size}),
+                    "interval_s": interval_s, "group_size": group_size,
+                    "fan": fan_speed, "pwm": heat_pwm}),
         qos=0,
     )
     for i, group in enumerate(groups):
@@ -952,6 +958,16 @@ def _run_stagger(ids: list, interval_s: int, group_size: int, client) -> None:
             )
             return
         for rid in group:
+            if fan_speed is not None or heat_pwm is not None:
+                set_parts = []
+                if fan_speed is not None:
+                    set_parts.append(f"fan={fan_speed}")
+                if heat_pwm is not None:
+                    set_parts.append(f"pwm={heat_pwm}")
+                fwd_sock.sendto(
+                    f"{rid};SET {' '.join(set_parts)}\n".encode(),
+                    (UDP_FORWARD_IP, UDP_FORWARD_PORT),
+                )
             fwd_sock.sendto(
                 f"{rid};HEAT_ON\n".encode(),
                 (UDP_FORWARD_IP, UDP_FORWARD_PORT),
@@ -1028,11 +1044,14 @@ def on_message(client, userdata, message):
             if upper.startswith('STAGGER_HEAT'):
                 toks = payload.split()
                 interval, group_size = 20, 5
+                fan_speed, heat_pwm = None, None
                 for tok in toks[1:]:
                     k, _, v = tok.lower().partition('=')
                     try:
                         if k == 'interval': interval   = max(1, int(v))
                         elif k == 'group':  group_size = max(1, int(v))
+                        elif k == 'fan':    fan_speed  = max(0, min(255, int(v)))
+                        elif k == 'pwm':    heat_pwm   = max(0, min(255, int(v)))
                     except ValueError:
                         pass
                 _stagger_stop.set()
@@ -1041,11 +1060,15 @@ def on_message(client, userdata, message):
                 _stagger_stop.clear()
                 _stagger_thread = threading.Thread(
                     target=_run_stagger,
-                    args=(IF_STAGGER_IDS, interval, group_size, client),
+                    args=(IF_STAGGER_IDS, interval, group_size, fan_speed, heat_pwm, client),
                     daemon=True,
                 )
                 _stagger_thread.start()
-                log.info(f"[STAGGER] 요청 interval={interval}s group={group_size}")
+                log.info(
+                    f"[STAGGER] 요청 interval={interval}s group={group_size}"
+                    f" fan={fan_speed if fan_speed is not None else 'keep'}"
+                    f" pwm={heat_pwm if heat_pwm is not None else 'keep'}"
+                )
             elif upper == 'STAGGER_STOP':
                 _stagger_stop.set()
                 log.info("[STAGGER] 중단 요청")

@@ -21,3 +21,4 @@ void fanOff();
 void allOff();
 void smaOn();
 void fanOn(uint8_t speed);
+void setSmaPwm(uint8_t pwm);

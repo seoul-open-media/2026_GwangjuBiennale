@@ -13,7 +13,7 @@
 #define SW_PIN      8   // 리드스위치 (INPUT_PULLUP) — SMA 수축 시 자석 감지
 
 // ── PWM ─────────────────────────────────────────────────────────────
-#define SMA_PWM_MAX      60          // (255 기준) — 스태거드 포함 운전 전류 추가 저감
+#define SMA_PWM_MAX      70          // (255 기준) — 스태거드 포함 운전 전류 추가 저감
 #define SMA_PWM_FREQ    100u         // 100 Hz — 스위칭 EMI 최소화 (초지향성 스피커 노이즈 저감)
 #define FAN_PWM_FREQ  15000u         // 15 kHz (팬은 가청 노이즈 방지 위해 고주파 유지)
 #define SMA_STAGGER_MS   0u          // 그룹 동시 점화 (0 = 딜레이 없음)
@@ -30,7 +30,7 @@
 #define STATUS_PKT_LEN  23   // STATUS 패킷 (Teensy→PD) 송신 길이
 #define START_B    255
 #define END_B      254
-#define MY_ROBOT_ID   31 // ★ 유닛마다 1~30 중 해당 번호로 변경하여 업로드
+#define MY_ROBOT_ID   25 // ★ 유닛마다 1~30 중 해당 번호로 변경하여 업로드
 
 // ── 상태 열거형 ──────────────────────────────────────────────────────
 enum State { IDLE, HEATING, SUSTAINING, COOLING, SENSOR_ERROR };
@@ -67,6 +67,7 @@ struct Cmd {
   uint8_t fanSpeed;       // 0~255     팬 PWM               (b5)
   bool    fanOnly;        // 0/1       팬 전용 모드          (b6)
   uint8_t targetTempMin;  // 10~30 °C  쿨링 저점 온도        (b7, 0=미설정)
+  uint8_t heatPwm;        // 0~255     SMA 가열 PWM          (b8, 0=기본값)
   bool    loopOn;         //                                (b12)
   uint8_t presetNum;      //                                (b13)
   uint8_t sound;          // 0~4                           (b14)

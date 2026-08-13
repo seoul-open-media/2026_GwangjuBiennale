@@ -148,6 +148,7 @@ class IfParams:
     fan     : int = 150
     fanOnly : int = 0
     tmin    : int = 0
+    pwm     : int = 0
     loop    : int = 0
     preset  : int = 0
     sound   : int = 0
@@ -169,7 +170,7 @@ def _clamp(v: int, lo: int, hi: int) -> int:
 def build_if_cmd(rid: int, p: IfParams) -> bytes:
     """Indeterministic_Float CMD 패킷 (16 bytes)
     b0=START  b1=rid  b2=mode  b3=temp  b4=sust  b5=fan  b6=fanOnly
-    b7=tmin  b8~b10=0  b11=volume  b12=loop  b13=preset  b14=sound  b15=END
+    b7=tmin  b8=pwm  b9~b10=0  b11=volume  b12=loop  b13=preset  b14=sound  b15=END
     """
     return bytes([
         START_B,
@@ -180,7 +181,8 @@ def build_if_cmd(rid: int, p: IfParams) -> bytes:
         _clamp(p.fan,     0, 255),
         p.fanOnly & 1,
         _clamp(p.tmin,    0, 30),
-        0, 0, 0,
+        _clamp(p.pwm,     0, 255),
+        0, 0,
         _clamp(p.volume,  0, 100),
         p.loop   & 1,
         _clamp(p.preset,  0, 7),
@@ -326,6 +328,7 @@ def _if_set(p: IfParams, kvs: dict) -> None:
         'temp':    'temp',
         'sust':    'sust',
         'fan':     'fan',
+        'pwm':     'pwm',
         'fanonly': 'fanOnly',
         'tmin':    'tmin',
         'loop':    'loop',

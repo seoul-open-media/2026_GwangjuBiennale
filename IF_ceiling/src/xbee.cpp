@@ -7,7 +7,8 @@
 //  b5  fanSpeed        0~255     (팬 PWM)
 //  b6  fanOnly         0/1       (1=팬만 ON, SMA 없음)
 //  b7  targetTempMin   10~30 °C  (쿨링 저점 온도, 0=미설정→ambTemp+0.5 기준)
-//  b8~b10  reserved    (0)
+//  b8  heatPwm         0~255     (SMA 가열 PWM, 0=기본값)
+//  b9~b10  reserved    (0)
 //  b11 volume          0~100     (오디오 볼륨, 0=변경 없음)
 //  b12 loopOn          0/1       (루프 반복 여부)
 //  b13 presetNum       (프리셋 번호)
@@ -16,7 +17,7 @@
 #include "xbee.h"
 #include "sensors.h"
 
-Cmd  cmd     = {1, 45, 5, 200, false, 0, 0};
+Cmd  cmd     = {1, 45, 5, 200, false, 0, 0, 0, 0};
 bool newCmd  = false;
 
 static uint8_t rxBuf[PKT_LEN];
@@ -49,6 +50,7 @@ static void parsePacket() {
   uint8_t fanSpd   = rxBuf[5];
   bool    fanOnly  = (rxBuf[6] == 1);  // b6: 팬 전용
   uint8_t tempMin  = rxBuf[7];         // b7: targetTempMin 10~30°C (0=미설정)
+  uint8_t heatPwm  = rxBuf[8];         // b8: SMA 가열 PWM (0=기본값)
   bool    loopOn   = (rxBuf[12] == 1);
   uint8_t preset   = rxBuf[13];
   uint8_t sound    = rxBuf[14];
@@ -100,6 +102,7 @@ static void parsePacket() {
   cmd.fanSpeed      = fanSpd;
   cmd.fanOnly       = fanOnly;
   cmd.targetTempMin = tempMin;
+  cmd.heatPwm       = heatPwm;
   cmd.loopOn        = loopOn;
   cmd.presetNum     = preset;
   cmd.sound         = sound;
@@ -110,6 +113,7 @@ static void parsePacket() {
   Serial.print(" temp=");         Serial.print(tempTgt);
   Serial.print(" sust=");         Serial.print(sustainS);
   Serial.print(" fan=");          Serial.print(fanSpd);
+  Serial.print(" pwm=");          Serial.print(heatPwm == 0 ? SMA_PWM_MAX : min((int)heatPwm, (int)SMA_PWM_MAX));
   Serial.print(" tMin=");         Serial.print(tempMin);
   Serial.print(" loop=");         Serial.print(loopOn);
   Serial.print(" sound=");        Serial.println(sound);
