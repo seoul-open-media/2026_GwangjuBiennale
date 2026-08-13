@@ -2,7 +2,7 @@
 //  b0  255 (START)
 //  b1  robot_id        (MY_ROBOT_ID)
 //  b2  mode            1=user_defined  2=play_preset
-//  b3  tempTarget      10~60 °C  (목표 가열 온도)
+//  b3  tempTarget      40~50 °C  (목표 가열 온도, user_defined)
 //  b4  sustainSec      0~60 s    (목표 도달 후 유지 시간)
 //  b5  fanSpeed        0~255     (팬 PWM)
 //  b6  fanOnly         0/1       (1=팬만 ON, SMA 없음)
@@ -60,8 +60,10 @@ static void parsePacket() {
     Serial.print("[XBEE DROP] mode out of range: "); Serial.println(mode);
     return;
   }
-  if (!fanOnly && fanSpd > 0 && (tempTgt < 10 || tempTgt > 60)) {
-    Serial.print("[XBEE DROP] tempTarget out of range: "); Serial.println(tempTgt);
+  bool isResetCmd = (!fanOnly && fanSpd == 0 && tempTgt == 0);
+  if (mode == 1 && !fanOnly && !isResetCmd &&
+      (tempTgt < STAGGER_TARGET_MIN || tempTgt > STAGGER_TARGET_MAX)) {
+    Serial.print("[XBEE DROP] tempTarget out of range (40~50): "); Serial.println(tempTgt);
     return;
   }
   if (tempMin > 0 && (tempMin < 10 || tempMin > 30)) {
@@ -141,7 +143,7 @@ void readXBee() {
 // PD 복원: value = MSB*253 + LSB
 // 온도: temp*100 / 경과시간: 초 단위
 // b14=amb MSB  b15=amb LSB  b16=pkt_num MSB  b17=pkt_num LSB
-// b18=tempTarget  b19=targetTempMin  b20=254(END)
+// b18=tempTarget(40~50, user_defined)  b19=targetTempMin  b20=254(END)
 static uint16_t pktNum = 0;  // 전송 순서 카운터 (0~64008 wraparound)
 void sendStatus(State currentState, unsigned long elapsedMs,
                 bool fault, uint8_t faultCode,
@@ -173,7 +175,7 @@ void sendStatus(State currentState, unsigned long elapsedMs,
     (uint8_t)(amb % 253),         // b15 amb LSB
     (uint8_t)(pktNum / 253),      // b16 pkt_num MSB
     (uint8_t)(pktNum % 253),      // b17 pkt_num LSB
-    cmd.tempTarget,               // b18 목표 가열 온도 (10~60°C)
+    cmd.tempTarget,               // b18 목표 가열 온도 (40~50°C, user_defined)
     cmd.targetTempMin,            // b19 쿨링 저점 온도 (10~30°C, 0=미설정)
     cmd.mode,                     // b20 모드 (1=user_defined 2=play_preset)
     cmd.presetNum,                // b21 프리셋 번호

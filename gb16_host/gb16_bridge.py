@@ -930,7 +930,7 @@ _stagger_thread: threading.Thread | None = None
 
 
 def _run_stagger(ids: list, interval_s: int, group_size: int,
-                 fan_speed: int | None, heat_pwm: int | None,
+                 fan_speed: int | None, heat_pwm: int | None, heat_temp: int | None,
                  repeat: bool, cycle_delay_s: int, client) -> None:
     """랜덤 순서로 group_size개씩 interval_s초 간격으로 IF HEAT_ON 전송."""
     log.info(
@@ -939,6 +939,7 @@ def _run_stagger(ids: list, interval_s: int, group_size: int,
         f" / cycle={cycle_delay_s}s"
         f" / fan={fan_speed if fan_speed is not None else 'keep'}"
         f" / pwm={heat_pwm if heat_pwm is not None else 'keep'}"
+        f" / temp={heat_temp if heat_temp is not None else 'keep'}"
     )
     cycle_index = 0
     while not _stagger_stop.is_set():
@@ -952,7 +953,7 @@ def _run_stagger(ids: list, interval_s: int, group_size: int,
             json.dumps({"event": "start", "cycle": cycle_index, "total_groups": n,
                         "interval_s": interval_s, "group_size": group_size,
                         "repeat": repeat, "cycle_delay_s": cycle_delay_s,
-                        "fan": fan_speed, "pwm": heat_pwm}),
+                        "fan": fan_speed, "pwm": heat_pwm, "temp": heat_temp}),
             qos=0,
         )
 
@@ -967,12 +968,14 @@ def _run_stagger(ids: list, interval_s: int, group_size: int,
                 )
                 return
             for rid in group:
-                if fan_speed is not None or heat_pwm is not None:
+                if fan_speed is not None or heat_pwm is not None or heat_temp is not None:
                     set_parts = []
                     if fan_speed is not None:
                         set_parts.append(f"fan={fan_speed}")
                     if heat_pwm is not None:
                         set_parts.append(f"pwm={heat_pwm}")
+                    if heat_temp is not None:
+                        set_parts.append(f"temp={heat_temp}")
                     fwd_sock.sendto(
                         f"{rid};SET {' '.join(set_parts)}\n".encode(),
                         (UDP_FORWARD_IP, UDP_FORWARD_PORT),
@@ -1073,7 +1076,7 @@ def on_message(client, userdata, message):
                 toks = payload.split()
                 interval, group_size = 20, 5
                 repeat, cycle_delay = False, 10
-                fan_speed, heat_pwm = None, None
+                fan_speed, heat_pwm, heat_temp = None, None, None
                 for tok in toks[1:]:
                     k, _, v = tok.lower().partition('=')
                     try:
@@ -1085,6 +1088,7 @@ def on_message(client, userdata, message):
                             cycle_delay = max(0, min(600, int(v)))
                         elif k == 'fan':    fan_speed  = max(0, min(255, int(v)))
                         elif k == 'pwm':    heat_pwm   = max(0, min(100, int(v)))
+                        elif k == 'temp':   heat_temp  = max(40, min(50, int(v)))
                     except ValueError:
                         pass
                 _stagger_stop.set()
@@ -1093,7 +1097,7 @@ def on_message(client, userdata, message):
                 _stagger_stop.clear()
                 _stagger_thread = threading.Thread(
                     target=_run_stagger,
-                    args=(IF_STAGGER_IDS, interval, group_size, fan_speed, heat_pwm,
+                      args=(IF_STAGGER_IDS, interval, group_size, fan_speed, heat_pwm, heat_temp,
                           repeat, cycle_delay, client),
                     daemon=True,
                 )
@@ -1103,6 +1107,7 @@ def on_message(client, userdata, message):
                     f" repeat={'on' if repeat else 'off'} cycle={cycle_delay}s"
                     f" fan={fan_speed if fan_speed is not None else 'keep'}"
                     f" pwm={heat_pwm if heat_pwm is not None else 'keep'}"
+                    f" temp={heat_temp if heat_temp is not None else 'keep'}"
                 )
             elif upper == 'STAGGER_STOP':
                 _stagger_stop.set()

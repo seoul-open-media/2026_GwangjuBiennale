@@ -1284,7 +1284,7 @@ body {
       <div id="params-if">
         <div class="param-row">
           <label>온도 목표</label>
-          <input type="range" id="if-temp" min="20" max="60" value="40"
+          <input type="range" id="if-temp" min="40" max="50" value="40"
             oninput="document.getElementById('if-temp-v').textContent=this.value+'°C'">
           <span class="param-val" id="if-temp-v">40°C</span>
         </div>
@@ -1315,7 +1315,7 @@ body {
       <div id="params-ceil" style="display:none">
         <div class="param-row">
           <label>온도 목표</label>
-          <input type="range" id="ceil-temp" min="20" max="60" value="40"
+          <input type="range" id="ceil-temp" min="40" max="50" value="40"
             oninput="document.getElementById('ceil-temp-v').textContent=this.value+'°C'">
           <span class="param-val" id="ceil-temp-v">40°C</span>
         </div>
@@ -1395,6 +1395,15 @@ body {
         <div class="check-row" style="margin-bottom:0">
           <input type="checkbox" id="stg-use-pwm" checked>
           <label for="stg-use-pwm">스태거드 시작 시 pwm 적용</label>
+        </div>
+        <div class="param-row" style="margin-top:6px">
+          <label>목표온도</label>
+          <input type="number" id="stg-temp" min="40" max="50" value="45">
+          <span class="param-val">40-50</span>
+        </div>
+        <div class="check-row" style="margin-bottom:0">
+          <input type="checkbox" id="stg-use-temp" checked>
+          <label for="stg-use-temp">스태거드 시작 시 temp 적용</label>
         </div>
       </div>
     </div>
@@ -3110,17 +3119,21 @@ function staggerStart() {
   var cycleDelay = parseInt((document.getElementById('stg-cycle-delay') || {}).value || "10");
   var useFan   = !!((document.getElementById('stg-use-fan') || {}).checked);
   var usePwm   = !!((document.getElementById('stg-use-pwm') || {}).checked);
+  var useTemp  = !!((document.getElementById('stg-use-temp') || {}).checked);
   var fan      = parseInt((document.getElementById('stg-fan') || {}).value || "255");
   var pwm      = parseInt((document.getElementById('stg-pwm') || {}).value || "100");
+  var temp     = parseInt((document.getElementById('stg-temp') || {}).value || "45");
 
   if (isNaN(interval) || interval < 1) interval = 20;
   if (isNaN(grp) || grp < 1) grp = 5;
   if (isNaN(cycleDelay) || cycleDelay < 0) cycleDelay = 10;
   if (isNaN(fan)) fan = 255;
   if (isNaN(pwm)) pwm = 100;
+  if (isNaN(temp)) temp = 45;
   cycleDelay = Math.min(600, cycleDelay);
   fan = Math.max(0, Math.min(255, fan));
   pwm = Math.max(0, Math.min(100, pwm));
+  temp = Math.max(40, Math.min(50, temp));
 
   if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
 
@@ -3128,12 +3141,14 @@ function staggerStart() {
   if (repeat) payload += " repeat=1 cycle=" + cycleDelay;
   if (useFan) payload += " fan=" + fan;
   if (usePwm) payload += " pwm=" + pwm;
+  if (useTemp) payload += " temp=" + temp;
 
   mqttClient.publish("gb16/all/cmd", payload, { qos: 1 });
   logCmd("🎲 스태거드 시작 — " + interval + "s / " + grp + "대"
     + (repeat ? (" / repeat on(" + cycleDelay + "s)") : " / repeat off")
     + (useFan ? (" / fan=" + fan) : " / fan=keep")
-    + (usePwm ? (" / pwm=" + pwm) : " / pwm=keep"));
+    + (usePwm ? (" / pwm=" + pwm) : " / pwm=keep")
+    + (useTemp ? (" / temp=" + temp) : " / temp=keep"));
 }
 function staggerStop() {
   if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
