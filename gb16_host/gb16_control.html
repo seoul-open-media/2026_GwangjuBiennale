@@ -1276,12 +1276,12 @@ body {
       <h3>파라미터</h3>
 
       <div class="param-tabs">
-        <div class="ptab active" id="tab-if"   onclick="switchParamTab('if')">IF</div>
-        <div class="ptab"        id="tab-ceil" onclick="switchParamTab('ceil')">IF Ceiling</div>
+        <div class="ptab"        id="tab-if"   onclick="switchParamTab('if')">IF</div>
+        <div class="ptab active" id="tab-ceil" onclick="switchParamTab('ceil')">IF Ceiling</div>
       </div>
 
       <!-- IF 파라미터 -->
-      <div id="params-if">
+      <div id="params-if" style="display:none">
         <div class="param-row">
           <label>온도 목표</label>
           <input type="range" id="if-temp" min="40" max="50" value="40"
@@ -1312,12 +1312,12 @@ body {
         </div>
       </div>
       <!-- IF Ceiling 파라미터 -->
-      <div id="params-ceil" style="display:none">
+      <div id="params-ceil">
         <div class="param-row">
           <label>온도 목표</label>
-          <input type="range" id="ceil-temp" min="40" max="50" value="40"
+          <input type="range" id="ceil-temp" min="40" max="50" value="43"
             oninput="document.getElementById('ceil-temp-v').textContent=this.value+'°C'">
-          <span class="param-val" id="ceil-temp-v">40°C</span>
+          <span class="param-val" id="ceil-temp-v">43°C</span>
         </div>
         <div class="param-row">
           <label>유지 시간</label>
@@ -1327,18 +1327,18 @@ body {
         </div>
         <div class="param-row">
           <label>팬 속도</label>
-          <input type="range" id="ceil-fan" min="0" max="255" value="150"
+          <input type="range" id="ceil-fan" min="0" max="255" value="160"
             oninput="document.getElementById('ceil-fan-v').textContent=this.value">
-          <span class="param-val" id="ceil-fan-v">150</span>
+          <span class="param-val" id="ceil-fan-v">160</span>
         </div>
         <div class="param-row">
           <label>최저 온도</label>
-          <input type="range" id="ceil-tmin" min="0" max="30" value="0"
+          <input type="range" id="ceil-tmin" min="0" max="30" value="28"
             oninput="document.getElementById('ceil-tmin-v').textContent=this.value===0?'amb':this.value+'°C'">
-          <span class="param-val" id="ceil-tmin-v">amb</span>
+          <span class="param-val" id="ceil-tmin-v">28°C</span>
         </div>
         <div class="check-row">
-          <input type="checkbox" id="ceil-loop">
+          <input type="checkbox" id="ceil-loop" checked>
           <label for="ceil-loop">루프 반복</label>
         </div>
       </div>
@@ -1914,7 +1914,7 @@ ALL_IDS.forEach(id => {
 const selected = new Set();
 let mqttClient = null;
 let usingAlt   = false;
-let paramTab   = 'if';
+let paramTab   = 'ceil';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  파라미터 탭 전환
