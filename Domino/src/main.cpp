@@ -138,13 +138,21 @@ void triggerServoRaiseOnly(uint8_t idx) {
 
   Domino& d = dominos[idx];
   if (d.state != IDLE) {
-    Serial.printf("[WARN] domino %d already running — servo trigger ignored\n", idx + 1);
-    return;
+    // raise-only는 현재 시퀀스를 즉시 중단하고 서보 동작을 우선한다.
+    digitalWrite(SOL_PINS[idx], LOW);
+    Serial.printf("[CMD]  domino %d: force servo raise (override state=%u)\n", idx + 1, static_cast<unsigned>(d.state));
+  } else {
+    Serial.printf("[CMD]  domino %d: servo raise-only trigger\n", idx + 1);
   }
 
-  Serial.printf("[CMD]  domino %d: servo raise-only trigger\n", idx + 1);
   d.state = RAISING;
   d.stateStart = millis();
+}
+
+void triggerAllServoRaiseOnly() {
+  for (uint8_t i = 0; i < 6; i++) {
+    triggerServoRaiseOnly(i);
+  }
 }
 
 // ── 도미노 트리거 ─────────────────────────────────────────────────────
@@ -190,8 +198,20 @@ void processXBeeCommand(uint8_t cmd) {
     return;
   }
 
+  if (cmd == 7) {
+    Serial.println("[XBEE] all domino trigger");
+    triggerDominoGroup(0x3F);
+    return;
+  }
+
   if (cmd >= 11 && cmd <= 16) {
     triggerServoRaiseOnly(static_cast<uint8_t>(cmd - 11));
+    return;
+  }
+
+  if (cmd == 17) {
+    Serial.println("[XBEE] all servo raise-only trigger");
+    triggerAllServoRaiseOnly();
     return;
   }
 
@@ -323,7 +343,7 @@ void setup() {
   Serial.println("        숫자 조합: 선택 도미노 동시 트리거 (예: 135, 1,3,5)");
   Serial.println("        'a'     : 전체 동시 트리거");
   Serial.println("        'r'     : 전체 서보 홈 리셋");
-  Serial.printf("[READY] XBee frame: [255][0x%02X][cmd][254], cmd=1~6 solenoid, 11~16 servo\n", DOMINO_FLAG);
+  Serial.printf("[READY] XBee frame: [255][0x%02X][cmd][254], cmd=1~6 solenoid, 7 all solenoid, 11~16 servo, 17 all servo\n", DOMINO_FLAG);
 }
 
 void loop() {
