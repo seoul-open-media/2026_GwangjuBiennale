@@ -34,6 +34,12 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 
+#define XBEE Serial1
+
+static constexpr uint8_t START_B = 255;
+static constexpr uint8_t END_B = 254;
+static constexpr uint8_t DOMINO_FLAG = 0xD1;
+
 // ── 핀 (MOSFET 채널 1~6) ────────────────────────────────────────────
 static const uint8_t SOL_PINS[6] = { 2, 3, 4, 5, 6, 7 };
 
@@ -44,6 +50,7 @@ static const uint8_t SOL_PINS[6] = { 2, 3, 4, 5, 6, 7 };
 // ── 타이밍 파라미터 ──────────────────────────────────────────────────
 #define SERVO_HOME     2650      // µs — 기본 대기 위치
 #define SERVO_RAISED   1950      // µs — 도미노 일으켜 세운 위치
+#define DOMINO6_AUX_CH_ENABLED 1 // 1: domino 6에서 ch6 동시 구동, 0: ch5만 사용
 #define SOL_PULSE_MS    200      // 솔레노이드 펄스 시간 (ms)
 #define SOL_STAGGER_MS   60      // 그룹 트리거 시 솔레노이드 시작 간격 (ms)
 #define WAIT_MS        5000      // 솔레노이드 OFF 후 서보 동작까지 대기 (ms)
@@ -69,6 +76,10 @@ struct Domino {
 
 static Domino dominos[6];
 static Adafruit_PWMServoDriver pwm(PCA9685_ADDR);
+static char serialCmdBuf[32];
+static uint8_t serialCmdLen = 0;
+static uint8_t xbeePacket[4];
+static uint8_t xbeeIdx = 0;
 
 // ── 서보 쓰기 ────────────────────────────────────────────────────────
 inline uint16_t clampServoUs(uint16_t us) {
@@ -83,7 +94,7 @@ inline void servoWrite(uint8_t ch, uint16_t us) {
 
 inline void servoWriteDomino(uint8_t dominoIdx, uint16_t us) {
   servoWrite(dominoIdx, us);
-  if (dominoIdx == 5) {
+  if (dominoIdx == 5 && DOMINO6_AUX_CH_ENABLED) {
     // 마지막 도미노(6번)만 보조 채널(ch6)도 함께 구동
     servoWrite(6, us);
   }
@@ -122,10 +133,102 @@ void triggerDominoGroup(uint8_t mask) {
   }
 }
 
+void triggerServoRaiseOnly(uint8_t idx) {
+  if (idx >= 6) return;
+
+  Domino& d = dominos[idx];
+  if (d.state != IDLE) {
+    Serial.printf("[WARN] domino %d already running — servo trigger ignored\n", idx + 1);
+    return;
+  }
+
+  Serial.printf("[CMD]  domino %d: servo raise-only trigger\n", idx + 1);
+  d.state = RAISING;
+  d.stateStart = millis();
+}
+
 // ── 도미노 트리거 ─────────────────────────────────────────────────────
 void triggerDomino(uint8_t idx) {
   if (idx >= 6) return;
   triggerDominoGroup((uint8_t)(1u << idx));
+}
+
+void processSerialCommandBuffer() {
+  if (serialCmdLen == 0) return;
+
+  uint8_t selectedMask = 0;
+  bool resetRequested = false;
+
+  for (uint8_t i = 0; i < serialCmdLen; i++) {
+    char c = serialCmdBuf[i];
+    if (c >= '1' && c <= '6') {
+      selectedMask |= (uint8_t)(1u << (c - '1'));
+    } else if (c == 'a' || c == 'A') {
+      selectedMask = 0x3F;  // 6비트 모두 ON
+    } else if (c == 'r' || c == 'R') {
+      resetRequested = true;
+    } else if (c == ' ' || c == ',' || c == '\t' || c == '\r' || c == '\n') {
+      // 구분자 문자는 무시
+    } else {
+      Serial.printf("[WARN] unknown cmd: '%c'\n", c);
+    }
+  }
+
+  if (resetRequested) {
+    resetAllDominos();
+  } else if (selectedMask != 0) {
+    if (selectedMask == 0x3F) Serial.println("[CMD]  전체 도미노 트리거");
+    triggerDominoGroup(selectedMask);
+  }
+
+  serialCmdLen = 0;
+}
+
+void processXBeeCommand(uint8_t cmd) {
+  if (cmd >= 1 && cmd <= 6) {
+    triggerDomino(static_cast<uint8_t>(cmd - 1));
+    return;
+  }
+
+  if (cmd >= 11 && cmd <= 16) {
+    triggerServoRaiseOnly(static_cast<uint8_t>(cmd - 11));
+    return;
+  }
+
+  Serial.printf("[XBEE] unsupported cmd: %u\n", cmd);
+}
+
+void readXBeePacket() {
+  while (XBEE.available() > 0) {
+    const uint8_t b = static_cast<uint8_t>(XBEE.read());
+
+    if (xbeeIdx == 0) {
+      if (b == START_B) {
+        xbeePacket[xbeeIdx++] = b;
+      }
+      continue;
+    }
+
+    xbeePacket[xbeeIdx++] = b;
+
+    if (xbeeIdx < sizeof(xbeePacket)) continue;
+
+    xbeeIdx = 0;
+    if (xbeePacket[0] != START_B || xbeePacket[3] != END_B) {
+      Serial.println("[XBEE] bad frame");
+      continue;
+    }
+
+    const uint8_t flag = xbeePacket[1];
+    const uint8_t cmd = xbeePacket[2];
+
+    if (flag != DOMINO_FLAG) {
+      continue;
+    }
+
+    Serial.printf("[XBEE] flag=0x%02X cmd=%u\n", flag, cmd);
+    processXBeeCommand(cmd);
+  }
 }
 
 // ── 상태 머신 업데이트 (loop마다 호출) ───────────────────────────────
@@ -197,6 +300,7 @@ void updateDomino(uint8_t i) {
 void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 3000);
+  XBEE.begin(115200);
   Serial.println("=== Domino controller boot ===");
 
   // 솔레노이드 핀 초기화
@@ -219,38 +323,31 @@ void setup() {
   Serial.println("        숫자 조합: 선택 도미노 동시 트리거 (예: 135, 1,3,5)");
   Serial.println("        'a'     : 전체 동시 트리거");
   Serial.println("        'r'     : 전체 서보 홈 리셋");
+  Serial.printf("[READY] XBee frame: [255][0x%02X][cmd][254], cmd=1~6 solenoid, 11~16 servo\n", DOMINO_FLAG);
 }
 
 void loop() {
-  // 시리얼 커맨드
-  if (Serial.available() > 0) {
-    uint8_t selectedMask = 0;
-    bool resetRequested = false;
+  // 시리얼 커맨드: 줄바꿈(Enter) 기준으로만 처리해 타이핑 중 오작동 방지
+  while (Serial.available() > 0) {
+    char c = Serial.read();
 
-    // 한 번에 들어온 시리얼 버스트를 모아 동시에 트리거한다.
-    while (Serial.available() > 0) {
-      char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      processSerialCommandBuffer();
+      continue;
+    }
 
-      if (c >= '1' && c <= '6') {
-        selectedMask |= (uint8_t)(1u << (c - '1'));
-      } else if (c == 'a' || c == 'A') {
-        selectedMask = 0x3F;  // 6비트 모두 ON
-      } else if (c == 'r' || c == 'R') {
-        resetRequested = true;
-      } else if (c == ' ' || c == ',' || c == '\t' || c == '\r' || c == '\n') {
-        // 구분자 문자는 무시
-      } else {
-        Serial.printf("[WARN] unknown cmd: '%c'\n", c);
+    if (serialCmdLen < sizeof(serialCmdBuf) - 1) {
+      serialCmdBuf[serialCmdLen++] = c;
+    } else {
+      // 버퍼가 가득 차면 우선 처리 후 새 입력을 받는다.
+      processSerialCommandBuffer();
+      if (c != '\n' && c != '\r') {
+        serialCmdBuf[serialCmdLen++] = c;
       }
     }
-
-    if (resetRequested) {
-      resetAllDominos();
-    } else if (selectedMask != 0) {
-      if (selectedMask == 0x3F) Serial.println("[CMD]  전체 도미노 트리거");
-      triggerDominoGroup(selectedMask);
-    }
   }
+
+  readXBeePacket();
 
   // 6개 도미노 상태 머신 업데이트
   for (int i = 0; i < 6; i++) updateDomino(i);

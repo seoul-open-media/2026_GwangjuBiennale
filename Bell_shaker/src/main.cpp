@@ -3,6 +3,12 @@
 #include <ACAN2517FD.h>
 #include <Moteus.h>
 
+#define XBEE Serial1
+
+static constexpr uint8_t START_B = 255;
+static constexpr uint8_t END_B = 254;
+static constexpr uint8_t BELL_SHAKER_FLAG = 0xB1;
+
 // Bell_shaker: single motor on Moteus R4
 // Serial command: '1' starts spinning, '0' stops.
 
@@ -120,6 +126,8 @@ uint32_t lastCmdMs = 0;
 bool canReady = false;
 char cmdBuf[16];
 uint8_t cmdIdx = 0;
+uint8_t xbeePacket[4];
+uint8_t xbeeIdx = 0;
 uint32_t stopRequestedMs = 0;
 uint32_t lastDisengageTryMs = 0;
 bool disengageDone = false;
@@ -138,6 +146,7 @@ bool waitingForReverse = false;
 uint32_t reverseRequestMs = 0;
 uint32_t preset9SweepStartMs = 0;
 uint32_t preset1StartMs = 0;
+uint8_t preset1FlipCount = 0;
 static constexpr float REVERSE_VELOCITY_CONFIRM = 0.15f;
 static constexpr uint32_t REVERSE_FORCE_TIMEOUT_MS = 400;
 
@@ -206,6 +215,7 @@ static void startMotor() {
   reverseRequestMs = 0;
   preset9SweepStartMs = millis();
   preset1StartMs = millis();
+  preset1FlipCount = 0;
   stopRequestedMs = 0;
   disengageDone = false;
   sendMoteusCurrent(activeQCurrentA);
@@ -243,6 +253,7 @@ static void startAlternatingPreset(uint8_t preset, float speedMultiplier, uint32
   reverseRequestMs = 0;
   preset9SweepStartMs = millis();
   preset1StartMs = 0;
+  preset1FlipCount = 0;
 
   const float targetSpeed = RUN_VELOCITY_TURNS_PER_SEC * speedMultiplier;
   if (preset == 7) {
@@ -298,6 +309,7 @@ static void startPreset8FastOscillation() {
   reverseRequestMs = 0;
   preset9SweepStartMs = 0;
   preset1StartMs = 0;
+  preset1FlipCount = 0;
 
   const float targetSpeed = RUN_VELOCITY_TURNS_PER_SEC * activeSpeedMultiplier;
   activeVelocityLimit = targetSpeed * 1.3f;
@@ -368,6 +380,7 @@ static void stopMotor() {
   reverseRequestMs = 0;
   preset9SweepStartMs = 0;
   preset1StartMs = 0;
+  preset1FlipCount = 0;
   stopRequestedMs = millis();
   lastDisengageTryMs = 0;
   disengageDone = false;
@@ -444,9 +457,55 @@ static void handleSerialCommand() {
   }
 }
 
+static void processXBeeCommand(uint8_t cmd) {
+  if (cmd <= 9) {
+    processCommandChar(static_cast<char>('0' + cmd));
+    return;
+  }
+
+  Serial.print("[Bell_shaker][XBEE] unsupported cmd: ");
+  Serial.println(cmd);
+}
+
+static void handleXBeeCommand() {
+  while (XBEE.available() > 0) {
+    const uint8_t b = static_cast<uint8_t>(XBEE.read());
+
+    if (xbeeIdx == 0) {
+      if (b == START_B) {
+        xbeePacket[xbeeIdx++] = b;
+      }
+      continue;
+    }
+
+    xbeePacket[xbeeIdx++] = b;
+
+    if (xbeeIdx < sizeof(xbeePacket)) continue;
+
+    xbeeIdx = 0;
+    if (xbeePacket[0] != START_B || xbeePacket[3] != END_B) {
+      Serial.println("[Bell_shaker][XBEE] bad frame");
+      continue;
+    }
+
+    const uint8_t flag = xbeePacket[1];
+    const uint8_t cmd = xbeePacket[2];
+    if (flag != BELL_SHAKER_FLAG) {
+      continue;
+    }
+
+    Serial.print("[Bell_shaker][XBEE] flag=0x");
+    Serial.print(flag, HEX);
+    Serial.print(" cmd=");
+    Serial.println(cmd);
+    processXBeeCommand(cmd);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 2000) {}
+  XBEE.begin(115200);
 
   SPI.begin();
 
@@ -480,10 +539,14 @@ void setup() {
   stopMotor();
   Serial.println("[Bell_shaker] boot complete");
   Serial.println("[Bell_shaker] enter 1 to start, 0 to stop");
+  Serial.print("[Bell_shaker] XBee frame: [255][0x");
+  Serial.print(BELL_SHAKER_FLAG, HEX);
+  Serial.println("][cmd][254], cmd=0..9");
 }
 
 void loop() {
   handleSerialCommand();
+  handleXBeeCommand();
   if (canReady) {
     canBus.poll();
   }
@@ -514,6 +577,14 @@ void loop() {
         if (activeReversePeriodMs > 0 && (now - lastDirectionFlipMs) >= activeReversePeriodMs) {
           lastDirectionFlipMs = now;
           directionSign = -directionSign;
+          if (activePreset == 1) {
+            ++preset1FlipCount;
+            // Preset 1: run exactly one round trip (forward -> reverse -> stop).
+            if (preset1FlipCount >= 2) {
+              stopMotor();
+              return;
+            }
+          }
         }
         float commandQCurrentA = activeQCurrentA;
         if (activePreset == 1 && preset1StartMs > 0 &&
