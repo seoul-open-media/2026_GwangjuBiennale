@@ -109,6 +109,13 @@ void resetAllDominos() {
   }
 }
 
+bool anyDominoBusy() {
+  for (uint8_t i = 0; i < 6; i++) {
+    if (dominos[i].state != IDLE) return true;
+  }
+  return false;
+}
+
 void triggerDominoGroup(uint8_t mask) {
   if (mask == 0) return;
 
@@ -185,6 +192,11 @@ void processSerialCommandBuffer() {
   if (resetRequested) {
     resetAllDominos();
   } else if (selectedMask != 0) {
+    if (anyDominoBusy()) {
+      Serial.println("[BUSY] trigger ignored: previous sequence still running");
+      serialCmdLen = 0;
+      return;
+    }
     if (selectedMask == 0x3F) Serial.println("[CMD]  전체 도미노 트리거");
     triggerDominoGroup(selectedMask);
   }
@@ -193,6 +205,12 @@ void processSerialCommandBuffer() {
 }
 
 void processXBeeCommand(uint8_t cmd) {
+  const bool isSolenoidTriggerCmd = (cmd >= 1 && cmd <= 7);
+  if (isSolenoidTriggerCmd && anyDominoBusy()) {
+    Serial.printf("[XBEE][BUSY] cmd=%u ignored: previous sequence still running\n", cmd);
+    return;
+  }
+
   if (cmd >= 1 && cmd <= 6) {
     triggerDomino(static_cast<uint8_t>(cmd - 1));
     return;
