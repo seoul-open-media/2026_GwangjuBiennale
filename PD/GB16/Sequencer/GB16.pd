@@ -1,5 +1,5 @@
-#N canvas 1861 442 275 474 12;
-#N canvas 961 167 1634 893 Mixer_New 1;
+#N canvas 572 105 275 474 12;
+#N canvas 827 165 1634 893 Mixer_New 1;
 #X obj 767 -2 PresetManager 1;
 #N canvas 996 1057 1854 975 previous_lights 0;
 #X restore 1246 8 pd previous_lights;
@@ -432,13 +432,13 @@
 #X connect 1 3 7 0;
 #X connect 4 0 3 0;
 #X restore 9 58 pd Global_Transport;
-#N canvas 137 175 886 634 DMX_data_serial 0;
+#N canvas 261 751 886 634 DMX_data_serial 1;
 #X obj 39 306 list prepend 255;
 #X obj 39 331 list append 254;
 #X obj 22 292 bng 8 250 50 0 empty empty empty 17 7 0 10 #fcfcfc #000000 #000000;
 #X text 99 244 bus 1;
 #X obj 39 432 prepend set;
-#X msg 38 465 255 1 4 0 0 0 255 254;
+#X msg 38 465 255 1 4 254 24 0 0 254;
 #X obj 22 268 r RGBW-OUT-1;
 #X obj 54 357 print;
 #X obj 118 290 bng 8 250 50 0 empty empty empty 17 7 0 10 #fcfcfc #000000 #000000;
@@ -491,7 +491,7 @@
 #X connect 17 0 0 0;
 #X connect 17 0 8 0;
 #X restore 11 278 pd DMX_data_serial;
-#N canvas 749 356 1386 720 COMPORTS 0;
+#N canvas 826 207 1386 720 COMPORTS 0;
 #X msg 468 358 devices;
 #X floatatom 892 43 5 0 0 0 - 6-preset-result - 0;
 #X floatatom 967 45 5 0 0 0 - 7-preset-result - 0;
@@ -1181,7 +1181,7 @@
 #X connect 38 0 2 0;
 #X connect 38 0 13 0;
 #X restore 101 30 pd UDP;
-#N canvas 561 273 1386 720 light_control_message 1;
+#N canvas 356 303 1386 720 light_control_message 0;
 #X obj 226 150 s remote-PRST-change-1;
 #X obj 40 0 r show_timer;
 #X floatatom 40 25 5 0 0 0 - - - 0;
@@ -1283,6 +1283,7 @@
 #X msg 377 607 30000;
 #X obj 66 658 bng 15 250 50 0 empty empty empty 17 7 0 10 #fcfcfc #000000 #000000;
 #X obj 16 599 r lrb;
+#X msg 452 609 5000;
 #X connect 1 0 2 0;
 #X connect 2 0 3 0;
 #X connect 4 0 5 0;
@@ -1386,6 +1387,7 @@
 #X connect 97 0 99 0;
 #X connect 98 0 83 1;
 #X connect 100 0 97 0;
+#X connect 101 0 83 1;
 #X restore 13 305 pd light_control_message;
 #X obj 24 378 bng 50 250 50 0 light_test empty LIGHT_TEST -10 -15 0 15 #00fc04 #000000 #000000;
 #X obj 15 155 bng 50 250 50 0 ahae_test empty AHAE_TEST -10 -15 0 15 #fc8000 #000000 #000000;
