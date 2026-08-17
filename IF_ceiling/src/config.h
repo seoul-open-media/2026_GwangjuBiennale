@@ -19,6 +19,8 @@
 #define SMA_STAGGER_MS   0u          // 그룹 동시 점화 (0 = 딜레이 없음)
 #define SMA_BALANCE_THRESH  2.0f     // 두 센서 허용 온도차 (°C) — 초과 시 앞선 그룹 OFF
 #define HEAT_BALANCE_GRACE_MS 3000UL // 가열 시작 후 균형제어 유예 시간 (ms)
+#define STAGGER_TARGET_MIN 40u        // 스테거드 목표온도 하한 (°C)
+#define STAGGER_TARGET_MAX 50u        // 스테거드 목표온도 상한 (°C)
 #define HEAT_MAX_TEMP      50.0f     // 절대 상한 (°C) — 어느 센서든 초과 시 즉시 가열 정지
 #define HEAT_MAX_MS        90000UL   // 최대 연속 가열 시간 (ms) — 1.5분 초과 시 강제 냉각
 #define COOL_MAX_MS       600000UL   // 최대 냉각 시간 (ms) — 10분 초과 시 강제 IDLE (ambTemp 고착 방어)
@@ -62,7 +64,7 @@ enum State { IDLE, HEATING, SUSTAINING, COOLING, SENSOR_ERROR };
 // ── 커맨드 구조체 ────────────────────────────────────────────────────
 struct Cmd {
   uint8_t mode;           // 1=user_defined  2=play_preset  (b2)
-  uint8_t tempTarget;     // 10~60 °C  목표 가열 온도       (b3)
+  uint8_t tempTarget;     // 40~50 °C  목표 가열 온도       (b3, user_defined)
   uint8_t sustainSec;     // 0~60 s    유지 시간            (b4)
   uint8_t fanSpeed;       // 0~255     팬 PWM               (b5)
   bool    fanOnly;        // 0/1       팬 전용 모드          (b6)
