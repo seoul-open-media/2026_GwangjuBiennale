@@ -1,0 +1,17 @@
+[Unit]
+Description=GB16 audience monitor (YOLO + MJPEG)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host
+ExecStart=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/.venv/bin/python %h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/audience_monitor.py
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/gb16_audience.log
+StandardError=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/gb16_audience.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

@@ -36,19 +36,38 @@ gb16_host/
 pip install pyserial paho-mqtt python-dotenv
 ```
 
+관객 감지(카메라+YOLO)까지 사용하려면 추가 설치:
+```bash
+pip install -r requirements-audience.txt
+```
+
 ### 2. 환경 변수 설정
 ```bash
 cp .env.example .env
 # .env 파일 수정 (NGROK_DOMAIN, MQTT_BROKER 등)
 ```
 
+카메라 설정 필수 항목:
+```env
+TAPO_CAM_USER=admin
+TAPO_CAM_PASS=YOUR_TAPO_CAMERA_PASSWORD
+AUDIENCE_CAMERA_1_IP=192.168.0.200
+AUDIENCE_STREAM_PORT=8181
+```
+
+카메라 고정 IP 권장 설정:
+- 공유기 DHCP Reservation(권장): 카메라 MAC 주소를 고정 IP에 매핑
+- 예: C200C MAC -> 192.168.0.200
+- 앱에서 IP를 수동 지정하는 방식보다 공유기 예약이 더 안정적
+
 ### 3. systemd 서비스 등록 (최초 1회)
 ```bash
 mkdir -p ~/.config/systemd/user
 cp systemd/gb16-host.service   ~/.config/systemd/user/
 cp systemd/gb16-bridge.service ~/.config/systemd/user/
+cp systemd/gb16-audience.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable gb16-host.service gb16-bridge.service
+systemctl --user enable gb16-host.service gb16-bridge.service gb16-audience.service
 ```
 
 ### 4. 실행 / 종료
@@ -61,8 +80,23 @@ systemctl --user enable gb16-host.service gb16-bridge.service
 ```bash
 systemctl --user status gb16-host.service
 systemctl --user status gb16-bridge.service
+systemctl --user status gb16-audience.service
 journalctl --user -u gb16-host.service -f
 ```
+
+## 관객 감지/카메라 스트림
+
+- 실행 파일: `audience_monitor.py`
+- 감지 토픽:
+  - `audience/cam1/present`
+  - `audience/cam2/present`
+  - `audience/present` (cam1 or cam2)
+- 스트림 URL:
+  - `http://<host>:8181/stream1.mjpeg`
+  - `http://<host>:8181/stream2.mjpeg`
+  - `http://<host>:8181/stream.mjpeg` (좌우 합성)
+
+`gb16_control.html`은 기본적으로 위 스트림을 사용해 카메라 화면을 표시합니다.
 
 ## 대시보드 HTML
 

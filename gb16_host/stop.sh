@@ -32,6 +32,7 @@ stop_pid() {
 # systemd 서비스 중지
 systemctl --user stop gb16-host.service   && echo "[OK] gb16-host 중지"   || echo "[--] gb16-host 이미 중지됨"
 systemctl --user stop gb16-bridge.service && echo "[OK] gb16-bridge 중지" || echo "[--] gb16-bridge 이미 중지됨"
+systemctl --user stop gb16-audience.service && echo "[OK] gb16-audience 중지" || echo "[--] gb16-audience 이미 중지됨"
 
 # ngrok 터널 중지
 stop_pid "ngrok"

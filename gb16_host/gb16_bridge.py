@@ -87,6 +87,11 @@ LOG_FILE         = os.getenv('LOG_FILE',         'gb16_bridge.log')
 DB_FILE          = os.getenv('DB_FILE',          'gb16_data.db')
 STATIC_DIR       = os.getenv('STATIC_DIR',       str(Path(__file__).parent))
 
+# 관객 감지 상태를 Pure Data PC로 UDP 전달
+AUDIENCE_PD_UDP_IP    = os.getenv('AUDIENCE_PD_UDP_IP', '192.168.0.12').strip()
+AUDIENCE_PD_UDP_PORT  = int(os.getenv('AUDIENCE_PD_UDP_PORT', '7001'))
+AUDIENCE_PD_UDP_ENABLE = os.getenv('AUDIENCE_PD_UDP_ENABLE', '1').strip().lower() in ('1', 'true', 'yes', 'on')
+
 TAPO_PLUG_MAP: dict = {}
 for _k, _v in os.environ.items():
     if _k.startswith('TAPO_GROUP_'):
@@ -140,6 +145,7 @@ prev_state        = {}
 pending_cmd       = {}
 
 fwd_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+aud_udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 
 # ═══════════════════════════════════════════════════════
@@ -646,6 +652,21 @@ def stats_api_server():
 
 _aud_present: dict = {0: False, 1: False, 2: False}
 
+
+def _send_audience_to_pd(present: bool, heartbeat: bool = False):
+    if not AUDIENCE_PD_UDP_ENABLE or not AUDIENCE_PD_UDP_IP:
+        return
+    try:
+        # PD의 netreceive -u -b (바이너리 모드)는 수신 바이트를 그대로 float로
+        # 내보내므로, ASCII 문자 '1'/'0'(=49/48)이 아니라 실제 바이트 값 1/0을 보낸다.
+        aud_udp_sock.sendto(bytes([1 if present else 0]), (AUDIENCE_PD_UDP_IP, AUDIENCE_PD_UDP_PORT))
+        if heartbeat:
+            log.debug(f"[AUD->PD] heartbeat {'1' if present else '0'} to {AUDIENCE_PD_UDP_IP}:{AUDIENCE_PD_UDP_PORT}")
+        else:
+            log.info(f"[AUD->PD] sent {'1' if present else '0'} to {AUDIENCE_PD_UDP_IP}:{AUDIENCE_PD_UDP_PORT}")
+    except Exception as e:
+        log.error(f"[AUD->PD] udp send failed: {e}")
+
 def handle_audience_mqtt(payload: str, camera: int = 0):
     present = payload.strip().lower() == 'true'
     prev    = _aud_present.get(camera, False)
@@ -654,6 +675,24 @@ def handle_audience_mqtt(payload: str, camera: int = 0):
     elif not present and prev:
         stats_audience_end(camera)
     _aud_present[camera] = present
+
+    # 통합 토픽(audience/present) 상태 변화 시 PD로 1/0 즉시 전달
+    if camera == 0 and present != prev:
+        _send_audience_to_pd(present)
+
+
+def audience_pd_heartbeat_loop():
+    """UDP는 전달 보장이 없으므로, 상태 변화 엣지에서 1회만 보내면
+    그 패킷이 유실되거나 PD가 그 순간 리슨 중이 아닐 때 영영 상태를
+    놓칠 수 있다. 주기적으로 현재 상태를 재전송해 자동으로 동기화되게 한다."""
+    if not AUDIENCE_PD_UDP_ENABLE or not AUDIENCE_PD_UDP_IP:
+        return
+    tick = 0
+    while True:
+        time.sleep(5)
+        tick += 1
+        # 5초마다 조용히 재전송, 60초에 한 번은 INFO로 살아있음을 남김
+        _send_audience_to_pd(_aud_present.get(0, False), heartbeat=(tick % 12 != 0))
 
 
 # ═══════════════════════════════════════════════════════
@@ -1265,6 +1304,7 @@ def main():
     threading.Thread(target=cmd_ack_monitor,      args=(client,), daemon=True).start()
     threading.Thread(target=telegram_poll,        args=(client,), daemon=True).start()
     threading.Thread(target=stats_api_server,                     daemon=True).start()
+    threading.Thread(target=audience_pd_heartbeat_loop,            daemon=True).start()
 
     log.info("[BRIDGE] GB16 Bridge v1 running. Ctrl+C to stop.")
     try:

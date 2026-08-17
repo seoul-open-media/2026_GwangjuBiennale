@@ -5,7 +5,7 @@
 #  수행 작업:
 #    1. XBee udev 룰 설치 (/dev/xbee 심링크 + stty 설정)
 #    2. systemd user 서비스 설치 및 활성화
-#       gb16-host.service  gb16-bridge.service  gb16-ngrok.service
+#       gb16-host.service  gb16-bridge.service  gb16-audience.service  gb16-ngrok.service
 #    3. loginctl linger 활성화 (로그인 없이도 서비스 구동)
 #    4. 브라우저 자동 시작 등록 (~/.config/autostart/)
 #
@@ -69,7 +69,7 @@ echo ""
 echo "[..] systemd user 서비스 설치"
 mkdir -p "$SYSTEMD_USER_DIR"
 
-for svc in gb16-host.service gb16-bridge.service gb16-ngrok.service; do
+for svc in gb16-host.service gb16-bridge.service gb16-audience.service gb16-ngrok.service; do
     src="$SCRIPT_DIR/systemd/$svc"
     dst="$SYSTEMD_USER_DIR/$svc"
     if [ -f "$src" ]; then
@@ -88,6 +88,7 @@ echo ""
 echo "[..] 서비스 활성화 (부팅 시 자동 시작)"
 systemctl --user enable gb16-host.service
 systemctl --user enable gb16-bridge.service
+systemctl --user enable gb16-audience.service
 systemctl --user enable gb16-ngrok.service 2>/dev/null || \
     echo "[WARN] gb16-ngrok.service 활성화 실패 (ngrok 설치 확인 필요)"
 echo "[OK] 서비스 활성화 완료"
@@ -165,12 +166,13 @@ echo ""
 echo " 부팅 시 자동 시작 목록:"
 echo "   - gb16-host.service   (XBee 시리얼 게이트웨이)"
 echo "   - gb16-bridge.service (MQTT 브리지)"
+echo "   - gb16-audience.service (YOLO 관객 감지 + 카메라 스트림)"
 echo "   - gb16-ngrok.service  (ngrok 터널)"
 echo "   - 브라우저: $CONTROL_URL"
 echo ""
 echo " 서비스 상태 확인:"
-echo "   systemctl --user status gb16-host gb16-bridge gb16-ngrok"
+echo "   systemctl --user status gb16-host gb16-bridge gb16-audience gb16-ngrok"
 echo ""
 echo " 지금 바로 시작하려면:"
-echo "   systemctl --user start gb16-host gb16-bridge gb16-ngrok"
+echo "   systemctl --user start gb16-host gb16-bridge gb16-audience gb16-ngrok"
 echo "═══════════════════════════════════════════════════"

@@ -56,7 +56,11 @@ echo "[..] gb16-bridge 서비스 시작"
 systemctl --user restart gb16-bridge.service
 echo "[OK] gb16-bridge 시작  로그: logs/gb16_bridge.log"
 
-# ── 4. ngrok 터널 (외부 접속용) ─────────────────────────────────────
+# ── 4. 관객 감지 + 카메라 스트림 (YOLO + MJPEG) ───────────────────
+echo "[..] gb16-audience 서비스 시작"
+systemctl --user restart gb16-audience.service && echo "[OK] gb16-audience 시작  로그: logs/gb16_audience.log" || echo "[ERR] gb16-audience.service 시작 실패"
+
+# ── 5. ngrok 터널 (외부 접속용) ─────────────────────────────────────
 # .env 에서 NGROK_DOMAIN 로드
 NGROK_DOMAIN="${NGROK_DOMAIN:-}"
 if [ -f "$SCRIPT_DIR/.env" ]; then
