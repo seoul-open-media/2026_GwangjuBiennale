@@ -176,6 +176,12 @@ class AudienceMonitor:
         if not model_path.exists():
             raise RuntimeError(f"YOLO model not found: {model_path}")
         self.model = YOLO(str(model_path))
+        try:
+            import torch
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            self.device = "cpu"
+        log.info("YOLO inference device: %s", self.device)
 
         self.mqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="gb16_audience")
         if cfg.mqtt_user:
@@ -223,7 +229,7 @@ class AudienceMonitor:
             classes=[0],
             verbose=False,
             imgsz=640,
-            device="cpu",
+            device=self.device,
         )[0]
 
         person_count = 0
