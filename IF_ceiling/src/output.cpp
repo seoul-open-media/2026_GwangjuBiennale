@@ -74,11 +74,10 @@ void allOff() { smaOff(); fanOff(); }
 
 void smaOn() {
   if (fanActive) { fanOff(); delay(5); }  // FAN 먼저 끄기
-  // Group A 먼저, 딜레이 후 Group B → 동시 돌입전류 분산
+  // Group A / B 동시 점화
   analogWrite(SMA_A1_PIN, smaPwmDuty);
   analogWrite(SMA_A2_PIN, smaPwmDuty);
   smaActiveA = true;
-  delay(SMA_STAGGER_MS);
   analogWrite(SMA_B1_PIN, smaPwmDuty);
   analogWrite(SMA_B2_PIN, smaPwmDuty);
   smaActiveB = true;

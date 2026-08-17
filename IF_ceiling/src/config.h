@@ -13,14 +13,13 @@
 #define SW_PIN      8   // 리드스위치 (INPUT_PULLUP) — SMA 수축 시 자석 감지
 
 // ── PWM ─────────────────────────────────────────────────────────────
-#define SMA_PWM_MAX      70          // (255 기준) — 스태거드 포함 운전 전류 추가 저감
+#define SMA_PWM_MAX     100          // (255 기준) — 고정 운전 전류
 #define SMA_PWM_FREQ    100u         // 100 Hz — 스위칭 EMI 최소화 (초지향성 스피커 노이즈 저감)
 #define FAN_PWM_FREQ  15000u         // 15 kHz (팬은 가청 노이즈 방지 위해 고주파 유지)
-#define SMA_STAGGER_MS   0u          // 그룹 동시 점화 (0 = 딜레이 없음)
 #define SMA_BALANCE_THRESH  2.0f     // 두 센서 허용 온도차 (°C) — 초과 시 앞선 그룹 OFF
 #define HEAT_BALANCE_GRACE_MS 3000UL // 가열 시작 후 균형제어 유예 시간 (ms)
-#define STAGGER_TARGET_MIN 40u        // 스테거드 목표온도 하한 (°C)
-#define STAGGER_TARGET_MAX 50u        // 스테거드 목표온도 상한 (°C)
+#define TEMP_TARGET_MIN 40u          // 목표온도 하한 (°C)
+#define TEMP_TARGET_MAX 50u          // 목표온도 상한 (°C)
 #define HEAT_MAX_TEMP      50.0f     // 절대 상한 (°C) — 어느 센서든 초과 시 즉시 가열 정지
 #define HEAT_MAX_MS        90000UL   // 최대 연속 가열 시간 (ms) — 1.5분 초과 시 강제 냉각
 #define COOL_MAX_MS       600000UL   // 최대 냉각 시간 (ms) — 10분 초과 시 강제 IDLE (ambTemp 고착 방어)

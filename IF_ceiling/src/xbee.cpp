@@ -62,7 +62,7 @@ static void parsePacket() {
   }
   bool isResetCmd = (!fanOnly && fanSpd == 0 && tempTgt == 0);
   if (mode == 1 && !fanOnly && !isResetCmd &&
-      (tempTgt < STAGGER_TARGET_MIN || tempTgt > STAGGER_TARGET_MAX)) {
+      (tempTgt < TEMP_TARGET_MIN || tempTgt > TEMP_TARGET_MAX)) {
     Serial.print("[XBEE DROP] tempTarget out of range (40~50): "); Serial.println(tempTgt);
     return;
   }
