@@ -2370,6 +2370,11 @@ function stopCustom() {
   _sendPdCue('커스텀 중단', 0);
   // 사운드 스톱
   _stopSound();
+  // 스태거드 운용 중이면 중단
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+    logCmd('⛔ 스태거드 중단 (전체 스톱)');
+  }
   // 전체 로봇 리셋
   publish('all', 'RESET');
   logCmd('⏹ 전체 스톱 — RESET(all) + SOUND:0');
