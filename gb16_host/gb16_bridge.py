@@ -968,10 +968,36 @@ _stagger_stop   = threading.Event()
 _stagger_thread: threading.Thread | None = None
 
 
+def _build_balanced_groups(ids: list, group_size: int) -> list:
+    """id 목록을 group_size개의 구간(zone)으로 나눠 zone별로 순서를 섞은 뒤,
+    그룹마다 zone별로 하나씩 뽑아 구성한다 — 특정 구간(예: 1~5번대)에
+    쏠리지 않고 전체 범위(1~30)에서 균형있게 선택되도록 하기 위함.
+    예) 1~30, group_size=5 → 1~6 / 7~12 / 13~18 / 19~24 / 25~30 5개 구간에서
+        각 그룹이 구간마다 1대씩 총 5대로 구성된다."""
+    if not ids:
+        return []
+    group_size = max(1, group_size)
+    n_zones = min(group_size, len(ids))
+    zone_len = -(-len(ids) // n_zones)  # ceil division
+    zones = []
+    for i in range(n_zones):
+        zone = ids[i * zone_len:(i + 1) * zone_len]
+        random.shuffle(zone)
+        zones.append(zone)
+    total_groups = max((len(z) for z in zones), default=0)
+    groups = []
+    for gi in range(total_groups):
+        group = [zone[gi] for zone in zones if gi < len(zone)]
+        random.shuffle(group)  # 그룹 내부 순서도 랜덤화
+        groups.append(group)
+    return groups
+
+
 def _run_stagger(ids: list, interval_s: int, group_size: int,
                  fan_speed: int | None, heat_pwm: int | None, heat_temp: int | None,
                  repeat: bool, cycle_delay_s: int, client) -> None:
-    """랜덤 순서로 group_size개씩 interval_s초 간격으로 IF HEAT_ON 전송."""
+    """구간별 균형 배분(각 그룹이 1~30 전 범위에서 고르게 뽑히도록)으로 group_size개씩
+    interval_s초 간격으로 IF HEAT_ON 전송."""
     log.info(
         f"[STAGGER] 시작 — {len(ids)}대 / {interval_s}s 간격"
         f" / group={group_size} / repeat={'on' if repeat else 'off'}"
@@ -983,9 +1009,7 @@ def _run_stagger(ids: list, interval_s: int, group_size: int,
     cycle_index = 0
     while not _stagger_stop.is_set():
         cycle_index += 1
-        shuffled = ids[:]
-        random.shuffle(shuffled)
-        groups = [shuffled[i:i + group_size] for i in range(0, len(shuffled), group_size)]
+        groups = _build_balanced_groups(ids, group_size)
         n = len(groups)
         client.publish(
             f"{TOPIC_PREFIX}/stagger/status",
