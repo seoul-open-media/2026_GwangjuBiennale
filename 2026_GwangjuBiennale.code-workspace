@@ -5,6 +5,10 @@
       "path": "Indeterministic_Float"
     },
     {
+      "name": "PD",
+      "path": "PD"
+    },
+    {
       "name": "IF_ceiling",
       "path": "IF_ceiling"
     },
@@ -42,6 +46,7 @@
   ],
   "settings": {
     "platformio-ide.projectsDir": "",
+    "terminal.integrated.showExitAlert": false,
     "chat.tools.terminal.autoApprove": {
       "/^sudo apt-get install -y git$/": {
         "approve": true,
