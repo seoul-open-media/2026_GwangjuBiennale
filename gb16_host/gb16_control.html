@@ -2193,54 +2193,146 @@ function _logDemo(msg) {
 // ═══════════════════════════════════════════════════════════════════════════
 //  커스텀 타임라인
 // ═══════════════════════════════════════════════════════════════════════════
-let _customSteps   = [];   // [{t:seconds, target:'all'|'gp'|'if'|'gf'|'gp1'|'gp2', action:'PRESET:2'|'RESET'|'SOUND:1'|...}]
+let _customSteps   = [];   // [{t:seconds, target:'if'|'ceil', action:'if_stagger_play'|'if_stagger_stop'|'ceil_if_play'|'ceil_if_stop'}]
 let _customRunning = false;
 let _customTimers  = [];
 let _customTickId  = null;
 let _customStartMs = 0;
+const _CUSTOM_TIMELINE_KEY = 'customTimeline';
+const _CUSTOM_TIMELINE_BAK = 'customTimelineBackup';
 
 const _CS_TARGET_OPTS = [
-  ['all',  '전체 (GP+IF)'],
-  ['gp',   'GP 전체 (1-12)'],
-  ['if',   'IF 전체 (13-18)'],
-  ['gf',   'GP:꽃 (1-8)'],
-  ['gp1',  'GP:꽃잎1 (9-10)'],
-  ['gp2',  'GP:꽃잎2 (11-12)'],
+  ['if',   'IF'],
+  ['ceil', 'IF_ceiling'],
 ];
-const _CS_ACTION_OPTS = [
-  ['RESET',    '⛔ 리셋 (정지)'],
-  ['PRESET:1', 'P1 — 정지'],
-  ['PRESET:2', 'P2 — 유영'],
-  ['PRESET:3', 'P3 — 느린 유영'],
-  ['PRESET:4', 'P4 — 교번/힘찬'],
-  ['PRESET:5', 'P5 — 활발한/숨'],
-  ['PRESET:6', 'P6 — 순차 재생'],
-  ['PRESET:7', 'P7 — 랜덤 재생'],
-  ['SOUND:1',  '🔊 사운드 1'],
-  ['SOUND:2',  '🔊 사운드 2'],
-  ['SOUND:3',  '🔊 사운드 3'],
-  ['SOUND:4',  '🔊 사운드 4'],
-  ['SOUND:0',  '🔇 사운드 정지'],
-];
+const _CS_ACTION_OPTS_BY_TARGET = {
+  if: [
+    ['if_stagger_play', '스태거드 플레이'],
+    ['if_stagger_stop', '스태거드 스톱'],
+  ],
+  ceil: [
+    ['ceil_if_play', 'IF_ceiling play'],
+    ['ceil_if_stop', 'IF_ceiling stop'],
+  ],
+};
+
+function _csActionOpts(target) {
+  return _CS_ACTION_OPTS_BY_TARGET[target] || _CS_ACTION_OPTS_BY_TARGET.if;
+}
+
+function _normalizeCustomStep(step) {
+  const t = Math.max(0, parseInt(step && step.t, 10) || 0);
+  const target = (step && step.target) === 'ceil' ? 'ceil' : 'if';
+  const validActions = _csActionOpts(target).map(([v]) => v);
+  const action = validActions.includes(step && step.action)
+    ? step.action
+    : (target === 'ceil' ? 'ceil_if_play' : 'if_stagger_play');
+  return { t, target, action };
+}
+
+function _ceilSetCmdFromPanel() {
+  const t  = document.getElementById('ceil-temp').value;
+  const s  = document.getElementById('ceil-sust').value;
+  const f  = document.getElementById('ceil-fan').value;
+  const tm = document.getElementById('ceil-tmin').value;
+  const lp = document.getElementById('ceil-loop').checked ? 1 : 0;
+  return `SET temp=${t} sust=${s} fan=${f} tmin=${tm} loop=${lp}`;
+}
+
+function _sendCeilPlayReliable() {
+  const cmd = _ceilSetCmdFromPanel();
+  const ids = IF_CEIL.slice();
+
+  const sendPass = (label) => {
+    ids.forEach(id => publish(id, cmd));
+    ids.forEach(id => publish(id, 'HEAT_ON'));
+    logCmd(`[IF_ceiling play] ${label} SET+HEAT_ON (${ids.length}대)`);
+  };
+
+  sendPass('1차');
+  setTimeout(() => sendPass('2차'), 350);
+  setTimeout(() => sendPass('3차'), 1200);
+}
+
+function _sendCeilStopReliable() {
+  const ids = IF_CEIL.slice();
+
+  const sendPass = (label) => {
+    ids.forEach(id => publish(id, 'RESET'));
+    logCmd(`[IF_ceiling stop] ${label} RESET (${ids.length}대)`);
+  };
+
+  sendPass('1차');
+  setTimeout(() => sendPass('2차'), 350);
+  setTimeout(() => sendPass('3차'), 1200);
+}
+
+function _onCustomTargetChange(idx, target) {
+  if (!_customSteps[idx]) return;
+  _customSteps[idx].target = target === 'ceil' ? 'ceil' : 'if';
+  _customSteps[idx].action = _customSteps[idx].target === 'ceil' ? 'ceil_if_play' : 'if_stagger_play';
+  _renderCustomSteps();
+}
 
 function _loadCustomSteps() {
+  const _parseStepsArray = (raw) => {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(_normalizeCustomStep);
+    } catch(e) {
+      return [];
+    }
+  };
+
   try {
-    const s = localStorage.getItem('customTimeline');
-    if (s) { _customSteps = JSON.parse(s); return; }
+    // 1) 기본 키에서 복원
+    const primary = _parseStepsArray(localStorage.getItem(_CUSTOM_TIMELINE_KEY));
+    if (primary.length) {
+      _customSteps = primary;
+      return;
+    }
+
+    // 2) 백업 키에서 복원
+    const bakRaw = localStorage.getItem(_CUSTOM_TIMELINE_BAK);
+    if (bakRaw) {
+      const bakParsed = JSON.parse(bakRaw);
+      const bakSteps = Array.isArray(bakParsed)
+        ? bakParsed.map(_normalizeCustomStep)
+        : (Array.isArray(bakParsed?.steps) ? bakParsed.steps.map(_normalizeCustomStep) : []);
+      if (bakSteps.length) {
+        _customSteps = bakSteps;
+        localStorage.setItem(_CUSTOM_TIMELINE_KEY, JSON.stringify(_customSteps));
+        logCmd('[커스텀] 백업 데이터에서 타임라인 자동 복구');
+        return;
+      }
+    }
   } catch(e) {}
+
   _customSteps = [
-    { t:  0, target:'all', action:'RESET'    },
-    { t: 30, target:'gp',  action:'PRESET:3' },
-    { t: 90, target:'gp',  action:'PRESET:2' },
+    { t:  0, target:'if',   action:'if_stagger_play' },
+    { t: 60, target:'ceil', action:'ceil_if_play'    },
   ];
 }
 
 function _saveCustomSteps() {
-  localStorage.setItem('customTimeline', JSON.stringify(_customSteps));
+  const raw = JSON.stringify(_customSteps);
+  localStorage.setItem(_CUSTOM_TIMELINE_KEY, raw);
+
+  // 비어있지 않은 스텝만 백업으로 보관해, 실수로 빈값 저장 시 복구 가능하게 유지
+  if (_customSteps.length > 0) {
+    localStorage.setItem(_CUSTOM_TIMELINE_BAK, JSON.stringify({
+      savedAt: Date.now(),
+      steps: _customSteps,
+    }));
+  }
 }
 
 function _readStepsFromUI() {
   const rows = document.querySelectorAll('.cs-row');
+  // 커스텀 탭을 아직 열지 않은 상태(렌더 전)에서는 기존 스텝을 유지한다.
+  if (!rows || rows.length === 0) return;
   _customSteps = [];
   rows.forEach(row => {
     const timeStr = row.querySelector('.cs-time').value.trim();
@@ -2250,38 +2342,43 @@ function _readStepsFromUI() {
     let secs = parts.length === 2
       ? (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0)
       : (parseInt(parts[0]) || 0);
-    _customSteps.push({ t: secs, target, action });
+    _customSteps.push(_normalizeCustomStep({ t: secs, target, action }));
   });
 }
 
-function _csTargetIds(target) {
-  switch(target) {
-    case 'gp':  return GP_IDS.slice();
-    case 'if':  return IF_IDS.slice();
-    case 'gf':  return GF_IDS.slice();
-    case 'gp1': return GP1_IDS.slice();
-    case 'gp2': return GP2_IDS.slice();
-    default:    return ALL_IDS.slice();
-  }
-}
-
 function _execCustomStep(step) {
-  const cmd = step.action;
-  if (cmd.startsWith('SOUND:')) {
-    ALL_IDS.forEach(id => publish(id, cmd));
-  } else {
-    _csTargetIds(step.target).forEach(id => publish(id, cmd));
+  let actionLabel = step.action;
+  if (step.target === 'if' && step.action === 'if_stagger_play') {
+    // 중복/잔류 스태거드를 방지하기 위해 시작 직전 정지 신호를 1회 보낸다.
+    if (mqttClient && mqttClient.connected) {
+      mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+      logCmd('⛔ [커스텀] 스태거드 선정리(STAGGER_STOP)');
+    }
+    // STAGGER_HEAT 내부에서 그룹 단위로 SET(fan/pwm/temp 선택) + HEAT_ON 처리
+    // 선행 전체 SET 브로드캐스트를 막아 동시 트리거를 방지한다.
+    staggerStart();
+    actionLabel = '스태거드 플레이';
+  } else if (step.target === 'if' && step.action === 'if_stagger_stop') {
+    staggerStopAndResetIF();
+    actionLabel = '스태거드 스톱';
+  } else if (step.target === 'ceil' && step.action === 'ceil_if_play') {
+    _sendCeilPlayReliable();
+    actionLabel = 'IF_ceiling play';
+  } else if (step.target === 'ceil' && step.action === 'ceil_if_stop') {
+    _sendCeilStopReliable();
+    actionLabel = 'IF_ceiling stop';
   }
-  const tLabel = { all:'전체', gp:'GP', if:'IF', gf:'GP꽃', gp1:'GP꽃잎1', gp2:'GP꽃잎2' }[step.target] || step.target;
+
+  const tLabel = step.target === 'ceil' ? 'IF_ceiling' : 'IF';
   const mm = String(Math.floor(step.t / 60)).padStart(1,'0');
   const ss = String(step.t % 60).padStart(2,'0');
-  _logCustom(`[${mm}:${ss}] ${tLabel} → ${cmd}`);
+  _logCustom(`[${mm}:${ss}] ${tLabel} → ${actionLabel}`);
 }
 
 function addCustomStep() {
   _readStepsFromUI();
   const lastT = _customSteps.length ? _customSteps[_customSteps.length - 1].t + 30 : 0;
-  _customSteps.push({ t: lastT, target:'gp', action:'PRESET:2' });
+  _customSteps.push({ t: lastT, target:'if', action:'if_stagger_play' });
   _renderCustomSteps();
 }
 
@@ -2308,12 +2405,12 @@ function _renderCustomSteps() {
         const ss = String(step.t % 60).padStart(2,'0');
         const tOpts = _CS_TARGET_OPTS.map(([v,l]) =>
           `<option value="${v}"${step.target===v?' selected':''}>${l}</option>`).join('');
-        const aOpts = _CS_ACTION_OPTS.map(([v,l]) =>
+        const aOpts = _csActionOpts(step.target).map(([v,l]) =>
           `<option value="${v}"${step.action===v?' selected':''}>${l}</option>`).join('');
         return `<div class="cs-row" data-idx="${i}">
           <span class="cs-seq">${i+1}</span>
           <input class="cs-time" type="text" value="${mm}:${ss}" placeholder="분:초" onchange="sortCustomSteps()" title="시간 (분:초 또는 초)">
-          <select class="cs-target">${tOpts}</select>
+          <select class="cs-target" onchange="_onCustomTargetChange(${i}, this.value)">${tOpts}</select>
           <select class="cs-action">${aOpts}</select>
           <button class="cs-del" onclick="removeCustomStep(${i})" title="삭제">✕</button>
         </div>`;
@@ -2926,6 +3023,7 @@ renderAll();
 updateSelCount();
 applyCamPort(); // 페이지 로드 시 자동 시작 (실패 시 5초마다 자동 재시도)
 _loadCustomSteps();  // 커스텀 타임라인 저장 데이터 복원
+_renderCustomSteps(); // 탭을 열기 전에도 스텝 DOM/상태를 일관되게 유지
 _loadPdCue();        // Pd 큐 설정 복원
 initSchedule();      // 공연 일정 카운트다운 시작
 
@@ -3142,6 +3240,10 @@ function staggerStart() {
 
   if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
 
+  var totalUnits = IF_IDS_A.concat(IF_IDS_B).length;
+  var groupCount = Math.max(1, Math.ceil(totalUnits / grp));
+  var lastGroup  = totalUnits - (groupCount - 1) * grp;
+
   var payload = "STAGGER_HEAT interval=" + interval + " group=" + grp;
   if (repeat) payload += " repeat=1 cycle=" + cycleDelay;
   if (useFan) payload += " fan=" + fan;
@@ -3150,15 +3252,44 @@ function staggerStart() {
 
   mqttClient.publish("gb16/all/cmd", payload, { qos: 1 });
   logCmd("🎲 스태거드 시작 — " + interval + "s / " + grp + "대"
+    + " / 총 " + totalUnits + "대, " + groupCount + "그룹"
+    + " (마지막 그룹 " + lastGroup + "대)"
     + (repeat ? (" / repeat on(" + cycleDelay + "s)") : " / repeat off")
     + (useFan ? (" / fan=" + fan) : " / fan=keep")
     + (usePwm ? (" / pwm=" + pwm) : " / pwm=keep")
     + (useTemp ? (" / temp=" + temp) : " / temp=keep"));
 }
+
+function staggerStopAndResetIF() {
+  if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
+
+  // 1) 스태거 스레드 중단 신호(유실 대비 3회)
+  mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+  setTimeout(() => {
+    if (mqttClient && mqttClient.connected) mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+  }, 250);
+  setTimeout(() => {
+    if (mqttClient && mqttClient.connected) mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+  }, 1000);
+
+  // 2) 이미 동작 중인 IF 유닛 즉시 정지
+  IF_IDS_A.concat(IF_IDS_B).forEach(id => publish(id, 'RESET'));
+  setTimeout(() => {
+    IF_IDS_A.concat(IF_IDS_B).forEach(id => publish(id, 'RESET'));
+    logCmd('⛔ 스태거드 중단 + IF RESET(재전송)');
+  }, 1200);
+}
+
 function staggerStop() {
   if (!mqttClient || !mqttClient.connected) { alert("MQTT 미연결"); return; }
   mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
-  logCmd("⛔ 스태거드 중단");
+  setTimeout(() => {
+    if (mqttClient && mqttClient.connected) mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+  }, 250);
+  setTimeout(() => {
+    if (mqttClient && mqttClient.connected) mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
+  }, 1000);
+  logCmd("⛔ 스태거드 중단 (신호 3회)");
 }
 </script>
 </body>
