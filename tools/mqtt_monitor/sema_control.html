@@ -574,10 +574,28 @@ body {
   background: #1e2235; border: 1px solid #2a3050; color: #c8cfe8;
   border-radius: 4px; padding: 3px 6px; font-size: 0.73rem;
 }
+.audience-toggle-row { margin-top: 6px; margin-bottom: 8px; }
+.aud-toggle-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.73rem;
+  color: #c8cfe8;
+}
+.aud-toggle-wrap input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #69f0ae;
+}
 .aud-status-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 5px 8px; border-radius: 6px;
   background: #1e2235; margin-top: 6px; margin-bottom: 4px;
+}
+.audience-auto-ui {
+  display: none;
 }
 .aud-dot {
   width: 10px; height: 10px; border-radius: 50%;
@@ -1162,12 +1180,13 @@ body {
 
       <!-- 공연 시작 -->
       <div class="man-section">
-        <h3>▶ 공연 시작 (관람객 입장 전)</h3>
+        <h3>▶ 공연 시작 / 관객감지 자동 실행</h3>
         <div class="man-step"><div class="man-num">1</div><div class="man-step-text">위 주소로 제어 패널 접속</div></div>
         <div class="man-step"><div class="man-num">2</div><div class="man-step-text">상단 상태 표시줄이 <strong style="color:#69f0ae">✅ MQTT 연결됨</strong> 으로 바뀌는지 확인</div></div>
-        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">[공연 제어] 섹션 → <strong>▶ 시작</strong> 버튼 클릭 → 버튼이 초록색으로 빛나면 정상 시작</div></div>
-        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">자동 모드는 기본값 <strong>빈도 반응형</strong> 유지 (관람객이 오면 자동 작동, 1분 부재 시 자동 정지)</div></div>
-        <div class="man-note">제어 패널은 여러 명이 동시에 접속해도 됩니다.</div>
+        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">[공연 제어] 섹션의 <strong>관객감지 ON</strong> 상태 확인 (OFF면 자동 실행 안됨)</div></div>
+        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">관객이 감지되면 <strong>커스텀 타임라인이 1회 자동 실행</strong>됨</div></div>
+        <div class="man-step"><div class="man-num">5</div><div class="man-step-text">즉시 실행이 필요하면 [커스텀 타임라인]의 <strong>▶ 실행</strong> 버튼 사용</div></div>
+        <div class="man-note">관객이 사라져도 자동 정지는 하지 않습니다. (중단은 [⏹ 전체 스톱] 또는 [중단] 버튼 사용)</div>
       </div>
 
       <!-- 공연 종료 -->
@@ -1265,6 +1284,14 @@ body {
         <button class="perf-btn perf-start" id="btn-start" onclick="startCustom()">▶ 시작</button>
         <button class="perf-btn perf-stop active" id="btn-stop" onclick="stopCustom()">⏹ 전체 스톱</button>
       </div>
+      <div class="mode-select-row audience-toggle-row">
+        <label>관객감지</label>
+        <div class="aud-toggle-wrap">
+          <input type="checkbox" id="aud-enable" onchange="onAudienceToggle(this)">
+          <span id="aud-enable-text">ON</span>
+        </div>
+      </div>
+      <div class="audience-auto-ui">
       <div class="mode-select-row">
         <label>자동 모드</label>
         <select id="auto-mode">
@@ -1310,6 +1337,7 @@ body {
         <span class="freq-val" id="freq-val">0회</span>
       </div>
       <div id="aud-action-log" style="font-size:0.67rem;color:#69f0ae;margin-top:4px;min-height:1.4em;line-height:1.4;word-break:break-all"></div>
+      </div>
     </div>
 
     <!-- 그룹 선택 -->
@@ -1801,6 +1829,36 @@ let audienceNow      = false;
 let visitHistory     = [];       // 방문 시작 타임스탬프 (10분 롤링 윈도우)
 const VISIT_WINDOW   = 10 * 60 * 1000;
 let _absentTimer     = null;     // 부재 시 딜레이 타이머
+let _lastAutoMode    = 'ADAPTIVE';
+
+function syncAudienceToggleFromMode() {
+  const modeEl = document.getElementById('auto-mode');
+  const sw = document.getElementById('aud-enable');
+  const txt = document.getElementById('aud-enable-text');
+  if (!modeEl || !sw) return;
+  const isOn = modeEl.value !== 'MANUAL';
+  sw.checked = isOn;
+  if (isOn) _lastAutoMode = modeEl.value;
+  if (txt) txt.textContent = isOn ? 'ON' : 'OFF';
+}
+
+function onAudienceToggle(cb) {
+  const modeEl = document.getElementById('auto-mode');
+  if (!modeEl) return;
+  if (cb.checked) {
+    modeEl.value = (_lastAutoMode && _lastAutoMode !== 'MANUAL') ? _lastAutoMode : 'ADAPTIVE';
+    logAudAction('🟢 관객감지 자동 ON');
+  } else {
+    if (modeEl.value !== 'MANUAL') _lastAutoMode = modeEl.value;
+    modeEl.value = 'MANUAL';
+    if (_absentTimer) {
+      clearTimeout(_absentTimer);
+      _absentTimer = null;
+    }
+    logAudAction('⚫ 관객감지 자동 OFF');
+  }
+  syncAudienceToggleFromMode();
+}
 
 let soundLoopMode = 0;  // 0=한번, 1=반복
 
@@ -1964,7 +2022,35 @@ function handleAudience(present) {
     badge.classList.toggle('present', present);
   }
 
-  // 관객 감지 자동시작/자동정지 비활성화
+  const mode = document.getElementById('auto-mode').value;
+  if (mode === 'MANUAL') {
+    if (_absentTimer) {
+      clearTimeout(_absentTimer);
+      _absentTimer = null;
+    }
+    return;
+  }
+
+  // 관객 입장 엣지에서만 공연 1회 실행
+  if (present && !wasPresent) {
+    visitHistory.push(Date.now());
+    updateFreqBar();
+    if (_customRunning) {
+      logAudAction('👥 관객 감지 — 공연 진행 중(추가 실행 없음)');
+      return;
+    }
+    _readStepsFromUI();
+    if (_customSteps.length === 0) {
+      logAudAction('⚠ 자동 시작 스킵 — 커스텀 스텝 없음');
+      return;
+    }
+    if (!mqttClient || !mqttClient.connected) {
+      logAudAction('⚠ 자동 시작 스킵 — MQTT 미연결');
+      return;
+    }
+    logAudAction('👥 관객 감지 — 공연 1회 시작');
+    startCustom();
+  }
 }
 
 function logAudAction(msg) {
@@ -3048,6 +3134,9 @@ setInterval(() => {
 renderAll();
 updateSelCount();
 applyCamPort(); // 페이지 로드 시 자동 시작 (실패 시 5초마다 자동 재시도)
+const _modeEl = document.getElementById('auto-mode');
+if (_modeEl) _modeEl.addEventListener('change', syncAudienceToggleFromMode);
+syncAudienceToggleFromMode();
 _loadCustomSteps();  // 커스텀 타임라인 저장 데이터 복원
 _loadPdCue();        // Pd 큐 설정 복원
 initSchedule();      // 공연 일정 카운트다운 시작

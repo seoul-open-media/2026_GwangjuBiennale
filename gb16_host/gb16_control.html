@@ -538,10 +538,28 @@ body {
   background: #1e2235; border: 1px solid #2a3050; color: #c8cfe8;
   border-radius: 4px; padding: 3px 6px; font-size: 0.73rem;
 }
+.audience-toggle-row { margin-top: 6px; margin-bottom: 8px; }
+.aud-toggle-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.73rem;
+  color: #c8cfe8;
+}
+.aud-toggle-wrap input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #69f0ae;
+}
 .aud-status-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 5px 8px; border-radius: 6px;
   background: #1e2235; margin-top: 6px; margin-bottom: 4px;
+}
+.audience-auto-ui {
+  display: none;
 }
 .aud-dot {
   width: 10px; height: 10px; border-radius: 50%;
@@ -1124,26 +1142,57 @@ body {
 
       <!-- 공연 시작 -->
       <div class="man-section">
-        <h3>▶ 공연 시작 (관람객 입장 전)</h3>
+        <h3>▶ 공연 시작 / 관객감지 자동 실행</h3>
         <div class="man-step"><div class="man-num">1</div><div class="man-step-text">위 주소로 제어 패널 접속</div></div>
         <div class="man-step"><div class="man-num">2</div><div class="man-step-text">상단 상태 표시줄이 <strong style="color:#69f0ae">✅ MQTT 연결됨</strong> 으로 바뀌는지 확인</div></div>
-        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">[공연 제어] 섹션 → <strong>▶ 시작</strong> 버튼 클릭 → 버튼이 초록색으로 빛나면 정상 시작</div></div>
-        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">자동 모드는 기본값 <strong>빈도 반응형</strong> 유지 (관람객이 오면 자동 작동, 1분 부재 시 자동 정지)</div></div>
-        <div class="man-note">제어 패널은 여러 명이 동시에 접속해도 됩니다.</div>
+        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">[공연 제어]의 <strong>관객감지 ON</strong> 확인 (OFF면 자동 실행 안됨)</div></div>
+        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">[커스텀 타임라인] 탭에서 스텝이 비어있지 않은지 확인 (스텝 0개면 자동 실행 안됨)</div></div>
+        <div class="man-step"><div class="man-num">5</div><div class="man-step-text">관객이 새로 감지되는 순간 <strong>커스텀 타임라인 1회</strong> 자동 실행</div></div>
+        <div class="man-step"><div class="man-num">6</div><div class="man-step-text">즉시 테스트는 [커스텀 타임라인]의 <strong>▶ 실행</strong> 버튼으로 수행</div></div>
+        <div class="man-note">관객이 사라져도 자동 정지는 하지 않습니다. 중단은 [⏹ 전체 스톱] 또는 커스텀 [중단] 버튼을 사용하세요.</div>
+      </div>
+
+      <!-- 관객감지 ON/OFF -->
+      <div class="man-section">
+        <h3>👤 관객감지 ON/OFF 스위치</h3>
+        <div class="man-row"><span class="man-key info">ON</span><span class="man-val">관객 감지 시 자동 실행 활성</span></div>
+        <div class="man-row"><span class="man-key warn">OFF</span><span class="man-val">관객 감지 자동 실행 비활성 (수동 실행만 가능)</span></div>
+        <div class="man-row"><span class="man-key">동작 기준</span><span class="man-val">관객 없음 → 있음으로 바뀌는 순간에만 1회 실행</span></div>
+        <div class="man-note">이미 공연이 실행 중일 때는 추가로 다시 시작하지 않습니다.</div>
+      </div>
+
+      <!-- 커스텀 타임라인 -->
+      <div class="man-section">
+        <h3>✏️ 커스텀 타임라인 운영</h3>
+        <div class="man-step"><div class="man-num">1</div><div class="man-step-text">[✏️ 커스텀 타임라인] 탭 열기</div></div>
+        <div class="man-step"><div class="man-num">2</div><div class="man-step-text">[＋ 스텝 추가]로 단계 추가 후 시간/대상/동작 설정</div></div>
+        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">[↕ 시간순 정렬]로 실행 순서 정리</div></div>
+        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">[▶ 실행]으로 1회 수동 실행, 필요 시 [⏹ 중단]</div></div>
+        <div class="man-row"><span class="man-key info">자동 실행 기준</span><span class="man-val">관객감지 ON + 스텝 존재 + MQTT 연결</span></div>
+      </div>
+
+      <!-- 수동 제어 기본 순서 -->
+      <div class="man-section">
+        <h3>🛠 수동 제어 기본 순서</h3>
+        <div class="man-step"><div class="man-num">1</div><div class="man-step-text">[그룹 선택]에서 제어 대상 선택 (전체34 / 유영전체 / 천장)</div></div>
+        <div class="man-step"><div class="man-num">2</div><div class="man-step-text">[파라미터]에서 IF 또는 IF Ceiling 탭 값 조정</div></div>
+        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">[📋 SET 전송] 후 [🔥 HEAT_ON] 또는 필요한 명령 실행</div></div>
+        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">스태거드 운용은 [🎲 스태거드 시작] / 중단은 [⏹ 스태거드 중단]</div></div>
       </div>
 
       <!-- 공연 종료 -->
       <div class="man-section">
         <h3>⏹ 공연 종료 / 긴급 정지</h3>
-        <div class="man-row"><span class="man-key warn">[공연 제어] → [⏹ 전체 스톱]</span><span class="man-val">모든 로봇 즉시 정지 + 사운드 정지</span></div>
+        <div class="man-row"><span class="man-key warn">[공연 제어] → [⏹ 전체 스톱]</span><span class="man-val">모든 로봇 정지 + 사운드 정지 + 리셋 재전송</span></div>
+        <div class="man-row"><span class="man-key">커스텀만 중단</span><span class="man-val">[커스텀 타임라인]의 [⏹ 중단]</span></div>
         <div class="man-note">⚠ 제어 패널이 응답 없을 경우 → 전원 멀티탭에서 직접 OFF</div>
       </div>
 
       <!-- 로봇 상태 -->
       <div class="man-section">
         <h3>🤖 로봇 상태 카드 읽는 법</h3>
-        <div class="man-row"><span class="man-key info">IF R01–R30</span><span class="man-val">비결정적 유영 (보라 테두리</span></div>
-        <div class="man-row"><span class="man-key info">IF Ceiling R31–R34</span><span class="man-val">IF Ceiling (파랑 테두리</span></div>
+        <div class="man-row"><span class="man-key info">IF R01–R30</span><span class="man-val">비결정적 유영 (보라 테두리)</span></div>
+        <div class="man-row"><span class="man-key info">IF Ceiling R31–R34</span><span class="man-val">IF Ceiling (파랑 테두리)</span></div>
         <br>
         <div class="man-row"><span class="man-key">IDLE</span><span class="man-val">대기 중 — 정상</span></div>
         <div class="man-row"><span class="man-key warn">HEAT 🔥</span><span class="man-val">가열 중</span></div>
@@ -1173,9 +1222,8 @@ body {
 
       <!-- 조명 -->
       <div class="man-section">
-        <h3>💡 조명 긴급 제어</h3>
-        <div class="man-row"><span class="man-key err">⬛ BLACKOUT</span><span class="man-val">전체 소등 (긴급 시)</span></div>
-        <div class="man-row"><span class="man-key">↺ 자동 복귀</span><span class="man-val">정상 자동 모드로 복귀</span></div>
+        <h3>💡 조명 제어 안내</h3>
+        <div class="man-note">현재 페이지에서는 조명 제어가 비활성 설정일 수 있습니다. 조명 패널이 보이지 않으면 정상입니다.</div>
       </div>
 
       <!-- 트러블슈팅 -->
@@ -1183,6 +1231,7 @@ body {
         <h3>🆘 트러블슈팅</h3>
         <div class="man-row"><span class="man-key err">로봇 카드 흐릿함</span><span class="man-val">[전원 제어] 해당 번호 [↺] 재시작 → 30~60초 대기</span></div>
         <div class="man-row"><span class="man-key err">ERR 상태 로봇</span><span class="man-val">[전원 제어] 해당 번호 [↺] 재시작</span></div>
+        <div class="man-row"><span class="man-key warn">관객 감지되는데 시작 안 됨</span><span class="man-val">관객감지 ON / 커스텀 스텝 존재 / MQTT 연결 상태 3가지 확인</span></div>
         <div class="man-row"><span class="man-key err">전체 응답 없음</span><span class="man-val">[⏹ 전체 스톱] 후 작가에게 연락</span></div>
         <div class="man-row"><span class="man-key warn">패널 접속 불가</span><span class="man-val">Wi-Fi 또는 데이터 연결 확인 · 내부 주소 재시도</span></div>
         <div class="man-row"><span class="man-key warn">MQTT 오류 (빨간 표시)</span><span class="man-val">페이지 새로고침 (F5 / 당겨서 새로고침)</span></div>
@@ -1214,12 +1263,20 @@ body {
         <button class="perf-btn perf-start" id="btn-start" onclick="startCustom()">▶ 시작</button>
         <button class="perf-btn perf-stop active" id="btn-stop" onclick="stopCustom()">⏹ 전체 스톱</button>
       </div>
+      <div class="mode-select-row audience-toggle-row">
+        <label>관객감지</label>
+        <div class="aud-toggle-wrap">
+          <input type="checkbox" id="aud-enable" onchange="onAudienceToggle(this)">
+          <span id="aud-enable-text">ON</span>
+        </div>
+      </div>
+      <div class="audience-auto-ui">
       <div class="mode-select-row">
         <label>자동 모드</label>
         <select id="auto-mode">
-          <option value="MANUAL" selected>수동 (관객 무시)</option>
+          <option value="MANUAL">수동 (관객 무시)</option>
           <option value="AUTO">자동 (감지 시 재생)</option>
-          <option value="ADAPTIVE">빈도 반응형</option>
+          <option value="ADAPTIVE" selected>빈도 반응형</option>
         </select>
       </div>
       <div class="mode-select-row">
@@ -1257,6 +1314,7 @@ body {
         <span class="freq-val" id="freq-val">0회</span>
       </div>
       <div id="aud-action-log" style="font-size:0.67rem;color:#69f0ae;margin-top:4px;min-height:1.4em;line-height:1.4;word-break:break-all"></div>
+      </div>
     </div>
 
     <!-- 그룹 선택 -->
@@ -1327,15 +1385,15 @@ body {
         </div>
         <div class="param-row">
           <label>팬 속도</label>
-          <input type="range" id="ceil-fan" min="0" max="255" value="160"
+          <input type="range" id="ceil-fan" min="0" max="255" value="255"
             oninput="document.getElementById('ceil-fan-v').textContent=this.value">
-          <span class="param-val" id="ceil-fan-v">160</span>
+          <span class="param-val" id="ceil-fan-v">255</span>
         </div>
         <div class="param-row">
           <label>최저 온도</label>
-          <input type="range" id="ceil-tmin" min="0" max="30" value="28"
+          <input type="range" id="ceil-tmin" min="0" max="30" value="30"
             oninput="document.getElementById('ceil-tmin-v').textContent=this.value===0?'amb':this.value+'°C'">
-          <span class="param-val" id="ceil-tmin-v">28°C</span>
+          <span class="param-val" id="ceil-tmin-v">30°C</span>
         </div>
         <div class="check-row">
           <input type="checkbox" id="ceil-loop" checked>
@@ -1402,7 +1460,7 @@ body {
           <span class="param-val">40-50</span>
         </div>
         <div class="check-row" style="margin-bottom:0">
-          <input type="checkbox" id="stg-use-temp">
+          <input type="checkbox" id="stg-use-temp" checked>
           <label for="stg-use-temp">스태거드 시작 시 temp 적용</label>
         </div>
       </div>
@@ -1558,7 +1616,7 @@ body {
         <div class="schedule-header">
           <span class="schedule-title">📅 공연 일정</span>
           <label class="sched-auto-toggle" title="예약 시간에 자동으로 커스텀 타임라인 실행">
-            <input type="checkbox" id="sched-auto-chk"> 자동 시작
+            <input type="checkbox" id="sched-auto-chk" checked> 자동 시작
           </label>
         </div>
         <div class="sched-countdown-wrap">
@@ -1595,6 +1653,7 @@ body {
 const BROKER     = 'ws://192.168.0.18:9001/mqtt';
 const BROKER_ALT = 'ws://localhost:9001/mqtt';
 const BROKER_EXT = 'wss://k890ff91.ala.asia-southeast1.emqxsl.com:8084/mqtt';  // 외부 접속용 (ngrok 경유)
+const SCHEDULE_ENABLED = false; // 이번 전시에서는 공연 일정 기능 비활성화
 
 const mqttBrokerOverride = '';
 const mqttUser = 'gb16_user';
@@ -1683,6 +1742,36 @@ let audienceNow      = false;
 let visitHistory     = [];       // 방문 시작 타임스탬프 (10분 롤링 윈도우)
 const VISIT_WINDOW   = 10 * 60 * 1000;
 let _absentTimer     = null;     // 부재 시 딜레이 타이머
+let _lastAutoMode    = 'ADAPTIVE';
+
+function syncAudienceToggleFromMode() {
+  const modeEl = document.getElementById('auto-mode');
+  const sw = document.getElementById('aud-enable');
+  const txt = document.getElementById('aud-enable-text');
+  if (!modeEl || !sw) return;
+  const isOn = modeEl.value !== 'MANUAL';
+  sw.checked = isOn;
+  if (isOn) _lastAutoMode = modeEl.value;
+  if (txt) txt.textContent = isOn ? 'ON' : 'OFF';
+}
+
+function onAudienceToggle(cb) {
+  const modeEl = document.getElementById('auto-mode');
+  if (!modeEl) return;
+  if (cb.checked) {
+    modeEl.value = (_lastAutoMode && _lastAutoMode !== 'MANUAL') ? _lastAutoMode : 'ADAPTIVE';
+    logAudAction('🟢 관객감지 자동 ON');
+  } else {
+    if (modeEl.value !== 'MANUAL') _lastAutoMode = modeEl.value;
+    modeEl.value = 'MANUAL';
+    if (_absentTimer) {
+      clearTimeout(_absentTimer);
+      _absentTimer = null;
+    }
+    logAudAction('⚫ 관객감지 자동 OFF');
+  }
+  syncAudienceToggleFromMode();
+}
 
 let soundLoopMode = 0;  // 0=한번, 1=반복
 
@@ -1846,7 +1935,35 @@ function handleAudience(present) {
     badge.classList.toggle('present', present);
   }
 
-  // 관객 감지 자동시작/자동정지 비활성화
+  const mode = document.getElementById('auto-mode').value;
+  if (mode === 'MANUAL') {
+    if (_absentTimer) {
+      clearTimeout(_absentTimer);
+      _absentTimer = null;
+    }
+    return;
+  }
+
+  // 관객 입장 엣지에서만 공연 1회 실행
+  if (present && !wasPresent) {
+    visitHistory.push(Date.now());
+    updateFreqBar();
+    if (_customRunning) {
+      logAudAction('👥 관객 감지 — 공연 진행 중(추가 실행 없음)');
+      return;
+    }
+    _readStepsFromUI();
+    if (_customSteps.length === 0) {
+      logAudAction('⚠ 자동 시작 스킵 — 커스텀 스텝 없음');
+      return;
+    }
+    if (!mqttClient || !mqttClient.connected) {
+      logAudAction('⚠ 자동 시작 스킵 — MQTT 미연결');
+      return;
+    }
+    logAudAction('👥 관객 감지 — 공연 1회 시작');
+    startCustom();
+  }
 }
 
 function logAudAction(msg) {
@@ -2198,8 +2315,24 @@ let _customRunning = false;
 let _customTimers  = [];
 let _customTickId  = null;
 let _customStartMs = 0;
+let _customSaveDebounceId = null;
+let _customServerSyncReady = false;
 const _CUSTOM_TIMELINE_KEY = 'customTimeline';
 const _CUSTOM_TIMELINE_BAK = 'customTimelineBackup';
+const _DEMO_TAB_KEY = 'gb16DemoTab';
+const _CUSTOM_TIMELINE_REV_KEY = 'customTimelineRevision';
+const _CUSTOM_TIMELINE_TARGET_REV = '2026-08-26-final-8step';
+
+const _CUSTOM_TIMELINE_FINAL_8STEP = [
+  { t: 0,   target:'ceil', action:'ceil_if_play' },
+  { t: 60,  target:'if',   action:'if_stagger_play' },
+  { t: 180, target:'ceil', action:'ceil_if_stop' },
+  { t: 360, target:'if',   action:'if_stagger_stop' },
+  { t: 480, target:'ceil', action:'ceil_if_play' },
+  { t: 570, target:'if',   action:'if_stagger_play' },
+  { t: 720, target:'ceil', action:'ceil_if_stop' },
+  { t: 720, target:'if',   action:'if_stagger_stop' },
+];
 
 const _CS_TARGET_OPTS = [
   ['if',   'IF'],
@@ -2287,10 +2420,27 @@ function _loadCustomSteps() {
   };
 
   try {
+    // one-time migration: force the verified final 8-step timeline for all browsers/profiles
+    const rev = localStorage.getItem(_CUSTOM_TIMELINE_REV_KEY);
+    if (rev !== _CUSTOM_TIMELINE_TARGET_REV) {
+      _customSteps = _CUSTOM_TIMELINE_FINAL_8STEP.map(_normalizeCustomStep);
+      localStorage.setItem(_CUSTOM_TIMELINE_KEY, JSON.stringify(_customSteps));
+      localStorage.setItem(_CUSTOM_TIMELINE_BAK, JSON.stringify({
+        savedAt: Date.now(),
+        steps: _customSteps,
+      }));
+      localStorage.setItem(_CUSTOM_TIMELINE_REV_KEY, _CUSTOM_TIMELINE_TARGET_REV);
+      localStorage.setItem(_DEMO_TAB_KEY, 'custom');
+      _customServerSyncReady = true;
+      logCmd('[커스텀] 최종 8스텝 타임라인으로 자동 복원 완료');
+      return;
+    }
+
     // 1) 기본 키에서 복원
     const primary = _parseStepsArray(localStorage.getItem(_CUSTOM_TIMELINE_KEY));
     if (primary.length) {
       _customSteps = primary;
+      _customServerSyncReady = true;
       return;
     }
 
@@ -2304,16 +2454,69 @@ function _loadCustomSteps() {
       if (bakSteps.length) {
         _customSteps = bakSteps;
         localStorage.setItem(_CUSTOM_TIMELINE_KEY, JSON.stringify(_customSteps));
+        _customServerSyncReady = true;
         logCmd('[커스텀] 백업 데이터에서 타임라인 자동 복구');
         return;
       }
     }
   } catch(e) {}
 
+  // 3) 서버 파일에서 복원 (브라우저 저장소가 비어도 재시작 후 복구)
+  _loadCustomStepsFromServer();
+
   _customSteps = [
     { t:  0, target:'if',   action:'if_stagger_play' },
     { t: 60, target:'ceil', action:'ceil_if_play'    },
   ];
+}
+
+function _normalizeStepsArray(arr) {
+  return Array.isArray(arr) ? arr.map(_normalizeCustomStep) : [];
+}
+
+async function _loadCustomStepsFromServer() {
+  try {
+    const resp = await fetch('/api/custom_timeline', { cache: 'no-store' });
+    if (!resp.ok) {
+      _customServerSyncReady = true;
+      return;
+    }
+    const data = await resp.json();
+    const steps = _normalizeStepsArray(data?.steps);
+    if (!steps.length) {
+      _customServerSyncReady = true;
+      return;
+    }
+
+    _customSteps = steps;
+    const raw = JSON.stringify(_customSteps);
+    localStorage.setItem(_CUSTOM_TIMELINE_KEY, raw);
+    localStorage.setItem(_CUSTOM_TIMELINE_BAK, JSON.stringify({
+      savedAt: Date.now(),
+      steps: _customSteps,
+    }));
+    _customServerSyncReady = true;
+    _renderCustomSteps();
+    logCmd('[커스텀] 서버 백업에서 타임라인 자동 복구');
+  } catch(e) {
+    _customServerSyncReady = true;
+    console.warn('[CUSTOM TIMELINE] server load failed:', e);
+  }
+}
+
+function _saveCustomStepsToServer() {
+  if (_customSaveDebounceId) clearTimeout(_customSaveDebounceId);
+  _customSaveDebounceId = setTimeout(async () => {
+    try {
+      await fetch('/api/custom_timeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ steps: _customSteps }),
+      });
+    } catch(e) {
+      console.warn('[CUSTOM TIMELINE] server save failed:', e);
+    }
+  }, 400);
 }
 
 function _saveCustomSteps() {
@@ -2327,6 +2530,7 @@ function _saveCustomSteps() {
       steps: _customSteps,
     }));
   }
+  if (_customServerSyncReady) _saveCustomStepsToServer();
 }
 
 function _readStepsFromUI() {
@@ -2411,7 +2615,7 @@ function _renderCustomSteps() {
           <span class="cs-seq">${i+1}</span>
           <input class="cs-time" type="text" value="${mm}:${ss}" placeholder="분:초" onchange="sortCustomSteps()" title="시간 (분:초 또는 초)">
           <select class="cs-target" onchange="_onCustomTargetChange(${i}, this.value)">${tOpts}</select>
-          <select class="cs-action">${aOpts}</select>
+          <select class="cs-action" onchange="_readStepsFromUI();_saveCustomSteps()">${aOpts}</select>
           <button class="cs-del" onclick="removeCustomStep(${i})" title="삭제">✕</button>
         </div>`;
       }).join('');
@@ -2522,6 +2726,7 @@ function showDemoTab(tab) {
     const isActive = (i === 0 && tab === 'preset') || (i === 1 && tab === 'custom');
     b.classList.toggle('dt-active', isActive);
   });
+  try { localStorage.setItem(_DEMO_TAB_KEY, tab); } catch(e) {}
   if (tab === 'custom') _renderCustomSteps();
 }
 
@@ -2529,13 +2734,83 @@ function showDemoTab(tab) {
 //  Pd 큐 (LAN UDP → Pure Data)
 // ═══════════════════════════════════════════════════════════════════════════
 let _pdCue = { ip: '', port: 3000, val: 1 };
+const _PD_CUE_KEY = 'pdCue';
+const _PD_CUE_OPEN_KEY = 'pdCueCfgOpen';
+const _PD_CUE_SERVER_PATH = '/api/pd_cue';
+let _pdCueServerReady = false;
+let _pdCueSaveDebounceId = null;
+
+function _sanitizePdCue(raw) {
+  const ip = String(raw?.ip || '').trim();
+  const port = parseInt(raw?.port, 10);
+  const val = parseInt(raw?.val, 10);
+  return {
+    ip,
+    port: Number.isFinite(port) ? Math.max(1, Math.min(65535, port)) : 3000,
+    val: Number.isFinite(val) ? Math.max(0, Math.min(255, val)) : 1,
+  };
+}
+
+function _persistPdCue() {
+  localStorage.setItem(_PD_CUE_KEY, JSON.stringify(_pdCue));
+}
+
+function _pdCueHasConfig(cue) {
+  return !!String(cue?.ip || '').trim();
+}
+
+function _savePdCueToServer() {
+  if (!_pdCueServerReady) return;
+  if (_pdCueSaveDebounceId) clearTimeout(_pdCueSaveDebounceId);
+  _pdCueSaveDebounceId = setTimeout(async () => {
+    try {
+      await fetch(_PD_CUE_SERVER_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(_pdCue),
+      });
+    } catch(e) {
+      console.warn('[PD CUE] server save failed:', e);
+    }
+  }, 250);
+}
+
+async function _loadPdCueFromServer() {
+  try {
+    const resp = await fetch(_PD_CUE_SERVER_PATH, { cache: 'no-store' });
+    if (!resp.ok) {
+      _pdCueServerReady = true;
+      return;
+    }
+    const data = await resp.json();
+    const serverCue = _sanitizePdCue(data || {});
+    if (!_pdCueHasConfig(_pdCue) && _pdCueHasConfig(serverCue)) {
+      _pdCue = serverCue;
+      _persistPdCue();
+      _applyPdCueToUI();
+      logCmd(`[Pd큐] 서버 백업에서 복원 — ${_pdCue.ip}:${_pdCue.port} val=${_pdCue.val}`);
+    }
+    _pdCueServerReady = true;
+  } catch(e) {
+    _pdCueServerReady = true;
+    console.warn('[PD CUE] server load failed:', e);
+  }
+}
 
 function _loadPdCue() {
   try {
-    const s = localStorage.getItem('pdCue');
-    if (s) _pdCue = { ..._pdCue, ...JSON.parse(s) };
+    const s = localStorage.getItem(_PD_CUE_KEY);
+    if (s) _pdCue = _sanitizePdCue({ ..._pdCue, ...JSON.parse(s) });
   } catch(e) {}
   _applyPdCueToUI();
+
+  try {
+    const cfgEl = document.getElementById('pd-cue-cfg');
+    const shouldOpen = localStorage.getItem(_PD_CUE_OPEN_KEY) === '1';
+    if (cfgEl) cfgEl.style.display = shouldOpen ? '' : 'none';
+  } catch(e) {}
+
+  _loadPdCueFromServer();
 }
 
 function _applyPdCueToUI() {
@@ -2565,14 +2840,39 @@ function togglePdCue() {
   if (!el) return;
   const show = el.style.display === 'none';
   el.style.display = show ? '' : 'none';
+  try { localStorage.setItem(_PD_CUE_OPEN_KEY, show ? '1' : '0'); } catch(e) {}
   if (show) _applyPdCueToUI();
 }
 
+function _readPdCueFromUI() {
+  _pdCue = _sanitizePdCue({
+    ip: document.getElementById('pd-ip')?.value,
+    port: document.getElementById('pd-port')?.value,
+    val: document.getElementById('pd-val')?.value,
+  });
+}
+
+function _bindPdCueInputs() {
+  const sync = () => {
+    _readPdCueFromUI();
+    _persistPdCue();
+    _savePdCueToServer();
+    _updatePdCueStatus();
+  };
+  ['pd-ip', 'pd-port', 'pd-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', sync);
+    el.addEventListener('change', sync);
+    el.addEventListener('blur', sync);
+  });
+}
+
 function savePdCue() {
-  _pdCue.ip   = (document.getElementById('pd-ip')?.value   || '').trim();
-  _pdCue.port = parseInt(document.getElementById('pd-port')?.value) || 3000;
-  _pdCue.val  = Math.max(0, Math.min(255, parseInt(document.getElementById('pd-val')?.value) || 1));
-  localStorage.setItem('pdCue', JSON.stringify(_pdCue));
+  _readPdCueFromUI();
+  _persistPdCue();
+  _savePdCueToServer();
+  _applyPdCueToUI();
   _updatePdCueStatus();
   logCmd(`[Pd큐] 설정 저장 — ${_pdCue.ip}:${_pdCue.port} val=${_pdCue.val}`);
 }
@@ -2729,6 +3029,7 @@ function _buildWeekTable() {
 }
 
 function initSchedule() {
+  if (!SCHEDULE_ENABLED) return;
   _buildWeekTable();
   _updateScheduleUI();
   setInterval(_updateScheduleUI, 1000);
@@ -3022,10 +3323,23 @@ setInterval(() => {
 renderAll();
 updateSelCount();
 applyCamPort(); // 페이지 로드 시 자동 시작 (실패 시 5초마다 자동 재시도)
+const _modeEl = document.getElementById('auto-mode');
+if (_modeEl) _modeEl.addEventListener('change', syncAudienceToggleFromMode);
+syncAudienceToggleFromMode();
 _loadCustomSteps();  // 커스텀 타임라인 저장 데이터 복원
 _renderCustomSteps(); // 탭을 열기 전에도 스텝 DOM/상태를 일관되게 유지
+try {
+  const _tab = localStorage.getItem(_DEMO_TAB_KEY);
+  if (_tab === 'custom' || _tab === 'preset') showDemoTab(_tab);
+} catch(e) {}
 _loadPdCue();        // Pd 큐 설정 복원
-initSchedule();      // 공연 일정 카운트다운 시작
+_bindPdCueInputs();  // Pd 큐 입력값 자동 저장/상태 반영
+if (SCHEDULE_ENABLED) {
+  initSchedule();    // 공연 일정 카운트다운 시작
+} else {
+  const _schedulePanel = document.querySelector('.schedule-panel');
+  if (_schedulePanel) _schedulePanel.style.display = 'none';
+}
 
 if (typeof mqtt !== 'undefined') {
   const _dbgBar = document.getElementById('mqtt-status');
