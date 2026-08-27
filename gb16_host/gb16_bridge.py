@@ -364,6 +364,9 @@ def db_cleanup():
 #  통계 HTTP API  (GET /api/stats?period=hour|day|week|month)
 # ═══════════════════════════════════════════════════════
 STATS_API_PORT = int(os.getenv('STATS_API_PORT', '8182'))
+CUSTOM_TIMELINE_FILE = Path(os.getenv('CUSTOM_TIMELINE_FILE', str(Path(STATIC_DIR) / 'custom_timeline.json')))
+CUSTOM_TIMELINE_BAK_FILE = Path(os.getenv('CUSTOM_TIMELINE_BAK_FILE', str(Path(STATIC_DIR) / 'custom_timeline.bak.json')))
+PD_CUE_FILE = Path(os.getenv('PD_CUE_FILE', str(Path(STATIC_DIR) / 'pd_cue.json')))
 
 ROBOT_NAMES = {
     **{i: f'Indet. Float R{i:02d}'  for i in range(1,  31)},
@@ -596,11 +599,172 @@ def _stats_query(period: str) -> dict:
         return {'error': str(e)}
 
 
+def _read_custom_timeline() -> dict:
+    """서버에 저장된 커스텀 타임라인을 읽어 반환한다."""
+    def _parse_timeline_text(raw: str) -> dict:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            steps = data.get('steps')
+            if isinstance(steps, list):
+                return {
+                    'savedAt': data.get('savedAt'),
+                    'steps': steps,
+                }
+        if isinstance(data, list):
+            return {'steps': data}
+        return {'steps': []}
+
+    try:
+        if CUSTOM_TIMELINE_FILE.exists():
+            parsed = _parse_timeline_text(CUSTOM_TIMELINE_FILE.read_text(encoding='utf-8'))
+            if parsed.get('steps'):
+                return parsed
+        if CUSTOM_TIMELINE_BAK_FILE.exists():
+            parsed_bak = _parse_timeline_text(CUSTOM_TIMELINE_BAK_FILE.read_text(encoding='utf-8'))
+            if parsed_bak.get('steps'):
+                return parsed_bak
+    except Exception as e:
+        log.warning(f"[CUSTOM TIMELINE] read failed: {e}")
+    return {'steps': []}
+
+
+def _write_custom_timeline(payload: dict) -> None:
+    """커스텀 타임라인을 파일에 원자적으로 저장한다."""
+    steps = payload.get('steps') if isinstance(payload, dict) else None
+    if not isinstance(steps, list):
+        raise ValueError('steps must be a list')
+    if len(steps) > 1000:
+        raise ValueError('steps too many')
+
+    record = {
+        'savedAt': int(time.time() * 1000),
+        'steps': steps,
+    }
+
+    CUSTOM_TIMELINE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CUSTOM_TIMELINE_BAK_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # 직전 정상본을 백업으로 보관해 예기치 않은 덮어쓰기/손상 시 복구한다.
+    if CUSTOM_TIMELINE_FILE.exists():
+        try:
+            CUSTOM_TIMELINE_BAK_FILE.write_text(CUSTOM_TIMELINE_FILE.read_text(encoding='utf-8'), encoding='utf-8')
+        except Exception as e:
+            log.warning(f"[CUSTOM TIMELINE] backup rotate failed: {e}")
+
+    tmp = CUSTOM_TIMELINE_FILE.with_suffix(CUSTOM_TIMELINE_FILE.suffix + '.tmp')
+    tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
+    os.replace(tmp, CUSTOM_TIMELINE_FILE)
+
+    # 최신 정상본도 별도 백업 파일에 유지한다.
+    CUSTOM_TIMELINE_BAK_FILE.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def _read_pd_cue() -> dict:
+    """서버에 저장된 Pd 큐 설정을 읽어 반환한다."""
+    try:
+        if not PD_CUE_FILE.exists():
+            return {'ip': '', 'port': 3000, 'val': 1}
+        data = json.loads(PD_CUE_FILE.read_text(encoding='utf-8'))
+        if not isinstance(data, dict):
+            return {'ip': '', 'port': 3000, 'val': 1}
+        ip = str(data.get('ip', '')).strip()
+        port_raw = data.get('port', 3000)
+        val_raw = data.get('val', 1)
+        try:
+            port = int(port_raw)
+        except Exception:
+            port = 3000
+        try:
+            val = int(val_raw)
+        except Exception:
+            val = 1
+        return {
+            'ip': ip,
+            'port': max(1, min(65535, port)),
+            'val': max(0, min(255, val)),
+        }
+    except Exception as e:
+        log.warning(f"[PD CUE] read failed: {e}")
+        return {'ip': '', 'port': 3000, 'val': 1}
+
+
+def _write_pd_cue(payload: dict) -> None:
+    """Pd 큐 설정을 파일에 원자적으로 저장한다."""
+    if not isinstance(payload, dict):
+        raise ValueError('payload must be an object')
+    ip = str(payload.get('ip', '')).strip()
+    try:
+        port = int(payload.get('port', 3000))
+    except Exception:
+        port = 3000
+    try:
+        val = int(payload.get('val', 1))
+    except Exception:
+        val = 1
+
+    record = {
+        'savedAt': int(time.time() * 1000),
+        'ip': ip,
+        'port': max(1, min(65535, port)),
+        'val': max(0, min(255, val)),
+    }
+
+    PD_CUE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = PD_CUE_FILE.with_suffix(PD_CUE_FILE.suffix + '.tmp')
+    tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
+    os.replace(tmp, PD_CUE_FILE)
+
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 class StatsHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
+
+    def _send_json(self, code: int, data: dict):
+        body = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
+    def do_POST(self):
+        import urllib.parse as up
+        parsed = up.urlparse(self.path)
+        path = parsed.path
+
+        if path not in ('/api/custom_timeline', '/api/pd_cue'):
+            self.send_error(404)
+            return
+
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            raw = self.rfile.read(max(0, length)) if length > 0 else b'{}'
+            data = json.loads(raw.decode('utf-8')) if raw else {}
+            if path == '/api/custom_timeline':
+                _write_custom_timeline(data)
+            else:
+                _write_pd_cue(data)
+            self._send_json(200, {'ok': True})
+        except ValueError as e:
+            self._send_json(400, {'ok': False, 'error': str(e)})
+        except Exception as e:
+            if path == '/api/custom_timeline':
+                log.error(f"[CUSTOM TIMELINE] save failed: {e}")
+            else:
+                log.error(f"[PD CUE] save failed: {e}")
+            self._send_json(500, {'ok': False, 'error': 'save_failed'})
 
     def do_GET(self):
         import urllib.parse as up
@@ -614,13 +778,15 @@ class StatsHandler(BaseHTTPRequestHandler):
             if period not in ('hour', 'day', 'week', 'month'):
                 period = 'day'
             data = _stats_query(period)
-            body = json.dumps(data, ensure_ascii=False).encode('utf-8')
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Content-Length', str(len(body)))
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_json(200, data)
+            return
+
+        if path == '/api/custom_timeline':
+            self._send_json(200, _read_custom_timeline())
+            return
+
+        if path == '/api/pd_cue':
+            self._send_json(200, _read_pd_cue())
             return
 
         base_dir = Path(STATIC_DIR)
@@ -639,15 +805,26 @@ class StatsHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', mime)
         self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
         self.end_headers()
         self.wfile.write(body)
 
 def stats_api_server():
-    srv = ThreadingHTTPServer(('0.0.0.0', STATS_API_PORT), StatsHandler)
-    log.info(f"[STATS] 대시보드+API 서버 on :{STATS_API_PORT}")
-    log.info(f"[STATS]   대시보드: http://0.0.0.0:{STATS_API_PORT}/")
-    log.info(f"[STATS]   통계 API:  http://0.0.0.0:{STATS_API_PORT}/api/stats?period=day")
-    srv.serve_forever()
+    while True:
+        try:
+            srv = ThreadingHTTPServer(('0.0.0.0', STATS_API_PORT), StatsHandler)
+            log.info(f"[STATS] 대시보드+API 서버 on :{STATS_API_PORT}")
+            log.info(f"[STATS]   대시보드: http://0.0.0.0:{STATS_API_PORT}/")
+            log.info(f"[STATS]   통계 API:  http://0.0.0.0:{STATS_API_PORT}/api/stats?period=day")
+            srv.serve_forever()
+        except OSError as e:
+            log.warning(f"[STATS] bind 실패({e}) — 2초 후 재시도")
+            time.sleep(2)
+        except Exception as e:
+            log.error(f"[STATS] 서버 오류({e}) — 2초 후 재시도")
+            time.sleep(2)
 
 
 _aud_present: dict = {0: False, 1: False, 2: False}
@@ -1278,7 +1455,7 @@ def udp_listener(client):
                         f";rate1={rate1:.2f};rate2={rate2:.2f}"
                         f";tmax={p['tmax']};tmin={p['tmin']}"
                         f";mode={p['mode']};preset={p['preset']}"
-                        f";uptime={uptime}"
+                        f";uptime={uptime};ts={int(time.time())}"
                     )
                     topic = f"{TOPIC_PREFIX}/robot/{rid}/log"
                     log.info(f"[UDP→MQTT] R{rid} | {text}")

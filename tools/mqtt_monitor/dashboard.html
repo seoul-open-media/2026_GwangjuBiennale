@@ -953,7 +953,9 @@ function connectMqtt(useAlt) {
     rate1 : parseFloat(kv.rate1 || 0),
     rate2 : parseFloat(kv.rate2 || 0),
     uptime: parseInt(kv.uptime  || 0),
-    lastSeen: Date.now(),
+    lastSeen: (Number.isFinite(parseInt(kv.ts || '0', 10)) && parseInt(kv.ts || '0', 10) > 0)
+      ? parseInt(kv.ts, 10) * 1000
+      : Date.now(),
     _lossWarn: robots[id]._lossWarn || false,
   };
   // sparkline 히스토리 업데이트

@@ -1743,6 +1743,26 @@ let visitHistory     = [];       // 방문 시작 타임스탬프 (10분 롤링 
 const VISIT_WINDOW   = 10 * 60 * 1000;
 let _absentTimer     = null;     // 부재 시 딜레이 타이머
 let _lastAutoMode    = 'ADAPTIVE';
+let _audSignalInitialized = false;
+const _AUTO_MODE_KEY = 'gb16.autoMode';
+
+function _saveAutoMode() {
+  const modeEl = document.getElementById('auto-mode');
+  if (!modeEl) return;
+  try { localStorage.setItem(_AUTO_MODE_KEY, modeEl.value); } catch(e) {}
+}
+
+function _loadAutoMode() {
+  const modeEl = document.getElementById('auto-mode');
+  if (!modeEl) return;
+  try {
+    const saved = localStorage.getItem(_AUTO_MODE_KEY);
+    if (saved && ['MANUAL', 'AUTO', 'ADAPTIVE'].includes(saved)) {
+      modeEl.value = saved;
+      if (saved !== 'MANUAL') _lastAutoMode = saved;
+    }
+  } catch(e) {}
+}
 
 function syncAudienceToggleFromMode() {
   const modeEl = document.getElementById('auto-mode');
@@ -1771,6 +1791,7 @@ function onAudienceToggle(cb) {
     logAudAction('⚫ 관객감지 자동 OFF');
   }
   syncAudienceToggleFromMode();
+  _saveAutoMode();
 }
 
 let soundLoopMode = 0;  // 0=한번, 1=반복
@@ -1916,9 +1937,8 @@ function updateFreqBar() {
   if (val) val.textContent = v + '회';
 }
 
-function handleAudience(present) {
+function handleAudience(present, wasRetained = false) {
   const wasPresent = audienceNow;
-  audienceNow = present;
 
   // UI 업데이트
   const dot   = document.getElementById('aud-dot');
@@ -1935,8 +1955,21 @@ function handleAudience(present) {
     badge.classList.toggle('present', present);
   }
 
+  // 연결 직후 초기 스냅샷/retained 메시지는 자동 시작 트리거에서 제외
+  if (!_audSignalInitialized || wasRetained) {
+    audienceNow = present;
+    _audSignalInitialized = true;
+    if (_absentTimer) {
+      clearTimeout(_absentTimer);
+      _absentTimer = null;
+    }
+    return;
+  }
+
+  audienceNow = present;
   const mode = document.getElementById('auto-mode').value;
-  if (mode === 'MANUAL') {
+  const audEnabled = !!document.getElementById('aud-enable')?.checked;
+  if (mode === 'MANUAL' || !audEnabled) {
     if (_absentTimer) {
       clearTimeout(_absentTimer);
       _absentTimer = null;
@@ -2320,8 +2353,6 @@ let _customServerSyncReady = false;
 const _CUSTOM_TIMELINE_KEY = 'customTimeline';
 const _CUSTOM_TIMELINE_BAK = 'customTimelineBackup';
 const _DEMO_TAB_KEY = 'gb16DemoTab';
-const _CUSTOM_TIMELINE_REV_KEY = 'customTimelineRevision';
-const _CUSTOM_TIMELINE_TARGET_REV = '2026-08-26-final-8step';
 
 const _CUSTOM_TIMELINE_FINAL_8STEP = [
   { t: 0,   target:'ceil', action:'ceil_if_play' },
@@ -2420,54 +2451,39 @@ function _loadCustomSteps() {
   };
 
   try {
-    // one-time migration: force the verified final 8-step timeline for all browsers/profiles
-    const rev = localStorage.getItem(_CUSTOM_TIMELINE_REV_KEY);
-    if (rev !== _CUSTOM_TIMELINE_TARGET_REV) {
-      _customSteps = _CUSTOM_TIMELINE_FINAL_8STEP.map(_normalizeCustomStep);
-      localStorage.setItem(_CUSTOM_TIMELINE_KEY, JSON.stringify(_customSteps));
-      localStorage.setItem(_CUSTOM_TIMELINE_BAK, JSON.stringify({
-        savedAt: Date.now(),
-        steps: _customSteps,
-      }));
-      localStorage.setItem(_CUSTOM_TIMELINE_REV_KEY, _CUSTOM_TIMELINE_TARGET_REV);
-      localStorage.setItem(_DEMO_TAB_KEY, 'custom');
-      _customServerSyncReady = true;
-      logCmd('[커스텀] 최종 8스텝 타임라인으로 자동 복원 완료');
-      return;
-    }
-
     // 1) 기본 키에서 복원
     const primary = _parseStepsArray(localStorage.getItem(_CUSTOM_TIMELINE_KEY));
     if (primary.length) {
       _customSteps = primary;
-      _customServerSyncReady = true;
-      return;
-    }
-
-    // 2) 백업 키에서 복원
-    const bakRaw = localStorage.getItem(_CUSTOM_TIMELINE_BAK);
-    if (bakRaw) {
-      const bakParsed = JSON.parse(bakRaw);
-      const bakSteps = Array.isArray(bakParsed)
-        ? bakParsed.map(_normalizeCustomStep)
-        : (Array.isArray(bakParsed?.steps) ? bakParsed.steps.map(_normalizeCustomStep) : []);
-      if (bakSteps.length) {
-        _customSteps = bakSteps;
-        localStorage.setItem(_CUSTOM_TIMELINE_KEY, JSON.stringify(_customSteps));
-        _customServerSyncReady = true;
-        logCmd('[커스텀] 백업 데이터에서 타임라인 자동 복구');
-        return;
+    } else {
+      // 2) 백업 키에서 복원
+      const bakRaw = localStorage.getItem(_CUSTOM_TIMELINE_BAK);
+      if (bakRaw) {
+        const bakParsed = JSON.parse(bakRaw);
+        const bakSteps = Array.isArray(bakParsed)
+          ? bakParsed.map(_normalizeCustomStep)
+          : (Array.isArray(bakParsed?.steps) ? bakParsed.steps.map(_normalizeCustomStep) : []);
+        if (bakSteps.length) {
+          _customSteps = bakSteps;
+          localStorage.setItem(_CUSTOM_TIMELINE_KEY, JSON.stringify(_customSteps));
+          logCmd('[커스텀] 백업 데이터에서 타임라인 자동 복구');
+        }
       }
     }
   } catch(e) {}
 
-  // 3) 서버 파일에서 복원 (브라우저 저장소가 비어도 재시작 후 복구)
-  _loadCustomStepsFromServer();
+  // 3) 로컬 저장소에 데이터가 없을 때만 기본 타임라인 사용
+  if (!_customSteps.length) {
+    _customSteps = _CUSTOM_TIMELINE_FINAL_8STEP.map(_normalizeCustomStep);
+    localStorage.setItem(_CUSTOM_TIMELINE_KEY, JSON.stringify(_customSteps));
+    localStorage.setItem(_CUSTOM_TIMELINE_BAK, JSON.stringify({
+      savedAt: Date.now(),
+      steps: _customSteps,
+    }));
+  }
 
-  _customSteps = [
-    { t:  0, target:'if',   action:'if_stagger_play' },
-    { t: 60, target:'ceil', action:'ceil_if_play'    },
-  ];
+  // 4) 서버 파일에서 복원 (브라우저 저장소가 비어도 재시작 후 복구)
+  _loadCustomStepsFromServer();
 }
 
 function _normalizeStepsArray(arr) {
@@ -3087,7 +3103,11 @@ function renderCard(r) {
   const offline = r.lastSeen ? (Date.now() - r.lastSeen > OFFLINE_TIMEOUT) : true;
   const since   = r.lastSeen ? Math.floor((Date.now() - r.lastSeen) / 1000) + 's' : 'offline';
   const isSel   = selected.has(r.id);
-  const modeStr = r.mode === 2 ? `P${r.preset}` : '';
+  // 오프라인이면 마지막 상태(HEAT 등)를 숨기고 초기화 상태로 표기
+  const view = offline
+    ? { ...r, state: '--', state2: '--', s1: null, s2: null, amb: null, fault: 0, code: 0, mode: 0, preset: 0 }
+    : r;
+  const modeStr = view.mode === 2 ? `P${view.preset}` : '';
   const bc      = cardBorderClass(r);
 
   // GP: U1 + U2 개별 상태·온도 행
@@ -3095,18 +3115,18 @@ function renderCard(r) {
     <div class="gp-units">
       <div class="unit-row">
         <span class="unit-label">U1</span>
-        <span class="unit-state ${ST_CLASS[r.state]||'st-IDLE'}">${r.state}</span>
-        <span class="unit-temp ${tempClass(r.s1)}">${tempStr(r.s1)}</span>
+        <span class="unit-state ${ST_CLASS[view.state]||'st-IDLE'}">${view.state}</span>
+        <span class="unit-temp ${tempClass(view.s1)}">${tempStr(view.s1)}</span>
       </div>
       <div class="unit-row">
         <span class="unit-label">U2</span>
-        <span class="unit-state ${ST_CLASS[r.state2]||'st-IDLE'}">${r.state2}</span>
-        <span class="unit-temp ${tempClass(r.s2)}">${tempStr(r.s2)}</span>
+        <span class="unit-state ${ST_CLASS[view.state2]||'st-IDLE'}">${view.state2}</span>
+        <span class="unit-temp ${tempClass(view.s2)}">${tempStr(view.s2)}</span>
       </div>
     </div>` : `
     <div class="card-temps">
-      <span>S1 <span class="temp-val ${tempClass(r.s1)}">${tempStr(r.s1)}</span></span>
-      <span>S2 <span class="temp-val ${tempClass(r.s2)}">${tempStr(r.s2)}</span></span>
+      <span>S1 <span class="temp-val ${tempClass(view.s1)}">${tempStr(view.s1)}</span></span>
+      <span>S2 <span class="temp-val ${tempClass(view.s2)}">${tempStr(view.s2)}</span></span>
     </div>`;
 
   return `<div class="robot-card${isSel?' selected':''}${offline?' offline':''}"
@@ -3114,13 +3134,13 @@ function renderCard(r) {
     <div class="card-header">
       <span class="card-id">R${String(r.id).padStart(2,'0')}</span>
       <span class="type-badge ${isGP?'type-gp':'type-if'}">${isGP?'GP':'IF'}</span>
-      ${!isGP ? `<span class="state-badge ${ST_CLASS[r.state]||'st-IDLE'}">${r.state}</span>` : ''}
+      ${!isGP ? `<span class="state-badge ${ST_CLASS[view.state]||'st-IDLE'}">${view.state}</span>` : ''}
       ${modeStr ? `<span class="mode-badge">${modeStr}</span>` : ''}
     </div>
     ${gpUnits}
     <div class="card-footer">
-      ${r.fault ? `<span class="fault-badge">F${r.code}</span>` : '<span></span>'}
-      <span class="amb-val" style="font-size:0.68rem">amb ${tempStr(r.amb)}</span>
+      ${view.fault ? `<span class="fault-badge">F${view.code}</span>` : '<span></span>'}
+      <span class="amb-val" style="font-size:0.68rem">amb ${tempStr(view.amb)}</span>
       <span class="last-seen">${since}</span>
       <div class="sel-indicator"></div>
     </div>
@@ -3137,7 +3157,7 @@ function renderAll() {
 //  STATUS 파싱 (bridge.py → MQTT: gb16/robot/{id}/log)
 //  형식: "5;state=HEAT;state2=IDLE;s1=43.2;s2=41.1;amb=22.5;fault=0;code=0;..."
 // ═══════════════════════════════════════════════════════════════════════════
-function parseLog(payload) {
+function parseLog(payload, wasRetained = false) {
   const parts  = payload.trim().split(';');
   const rid    = parseInt(parts[0]);
   if (!robots[rid]) return;
@@ -3177,7 +3197,14 @@ function parseLog(payload) {
 
   r.mode     = parseInt(kv.mode   ?? r.mode);
   r.preset   = parseInt(kv.preset ?? r.preset);
-  r.lastSeen = Date.now();
+  if (wasRetained && !r._liveSeen) {
+    // 리로드 직후 retained 스냅샷은 오래된 상태일 수 있으므로 즉시 오프라인 취급
+    r.lastSeen = null;
+  } else {
+    const tsSec = parseInt(kv.ts || '0', 10);
+    r.lastSeen = Number.isFinite(tsSec) && tsSec > 0 ? tsSec * 1000 : Date.now();
+    r._liveSeen = true;
+  }
 
   // 카드만 업데이트 (전체 재렌더 방지)
   const el = document.getElementById(`card-${rid}`);
@@ -3227,10 +3254,10 @@ function connectMqtt(useAlt) {
     if (LIGHT_ENABLED) mqttClient.subscribe('gb16/light/status', { qos: 0 });
   });
 
-  mqttClient.on('message', (_topic, payload) => {
+  mqttClient.on('message', (_topic, payload, packet) => {
     const _text = payload.toString();
     if (_topic === 'audience/present') {
-      handleAudience(_text.trim() === 'true');
+      handleAudience(_text.trim() === 'true', !!(packet && packet.retain));
       return;
     }
     if (LIGHT_ENABLED && _topic === 'gb16/light/status') {
@@ -3246,7 +3273,7 @@ function connectMqtt(useAlt) {
       }
       return;
     }
-    parseLog(_text);
+    parseLog(_text, !!(packet && packet.retain));
   });
 
   mqttClient.on('error', err => {
@@ -3272,10 +3299,19 @@ const offlineRobots = new Set();
 
 setInterval(() => {
   ALL_IDS.forEach(id => {
-    const el = document.getElementById(`card-${id}`);
+    let el = document.getElementById(`card-${id}`);
     if (!el) return;
     const r       = robots[id];
     const offline = r.lastSeen ? (Date.now() - r.lastSeen > OFFLINE_TIMEOUT) : true;
+    const wasOffline = offlineRobots.has(id);
+    // 오프라인/온라인 전환 시 상태 뱃지/온도/fault를 즉시 재렌더링
+    if (offline !== wasOffline) {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = renderCard(r);
+      const card = wrap.firstElementChild;
+      el.replaceWith(card);
+      el = card;
+    }
     el.classList.toggle('offline', offline);
     const lsEl = el.querySelector('.last-seen');
     if (lsEl && r.lastSeen) {
@@ -3323,8 +3359,9 @@ setInterval(() => {
 renderAll();
 updateSelCount();
 applyCamPort(); // 페이지 로드 시 자동 시작 (실패 시 5초마다 자동 재시도)
+_loadAutoMode();
 const _modeEl = document.getElementById('auto-mode');
-if (_modeEl) _modeEl.addEventListener('change', syncAudienceToggleFromMode);
+if (_modeEl) _modeEl.addEventListener('change', () => { syncAudienceToggleFromMode(); _saveAutoMode(); });
 syncAudienceToggleFromMode();
 _loadCustomSteps();  // 커스텀 타임라인 저장 데이터 복원
 _renderCustomSteps(); // 탭을 열기 전에도 스텝 DOM/상태를 일관되게 유지
