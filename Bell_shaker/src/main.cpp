@@ -3,7 +3,7 @@
 #include <ACAN2517FD.h>
 #include <Moteus.h>
 
-#define XBEE Serial1
+#define XBEE Serial4
 
 static constexpr uint8_t START_B = 255;
 static constexpr uint8_t END_B = 254;
@@ -471,6 +471,11 @@ static void handleXBeeCommand() {
   while (XBEE.available() > 0) {
     const uint8_t b = static_cast<uint8_t>(XBEE.read());
 
+    // Debug: show every raw byte received on the XBee serial line.
+    Serial.print("[Bell_shaker][XBEE] RX byte: 0x");
+    if (b < 0x10) Serial.print('0');
+    Serial.println(b, HEX);
+
     if (xbeeIdx == 0) {
       if (b == START_B) {
         xbeePacket[xbeeIdx++] = b;
@@ -484,13 +489,22 @@ static void handleXBeeCommand() {
 
     xbeeIdx = 0;
     if (xbeePacket[0] != START_B || xbeePacket[3] != END_B) {
-      Serial.println("[Bell_shaker][XBEE] bad frame");
+      Serial.print("[Bell_shaker][XBEE] bad frame:");
+      for (uint8_t i = 0; i < sizeof(xbeePacket); i++) {
+        Serial.print(" 0x");
+        Serial.print(xbeePacket[i], HEX);
+      }
+      Serial.println();
       continue;
     }
 
     const uint8_t flag = xbeePacket[1];
     const uint8_t cmd = xbeePacket[2];
     if (flag != BELL_SHAKER_FLAG) {
+      Serial.print("[Bell_shaker][XBEE] flag mismatch: got 0x");
+      Serial.print(flag, HEX);
+      Serial.print(", expected 0x");
+      Serial.println(BELL_SHAKER_FLAG, HEX);
       continue;
     }
 
