@@ -3,12 +3,15 @@
 //  Teensy 4.0 / SMA Controller v1.6
 //
 //  [동작]
-//    Serial로 '1'~'6' 수신 → 해당 도미노 시퀀스 실행
-//      1) 솔레노이드 펄스 (MOSFET 채널 ON → 200ms → OFF) → 도미노 쓰러짐
-//      2) 3초 대기
-//      3) 서보 2500→1750 (1초 sweep) → 도미노 일으켜 세움
-//      4) 500ms 유지
-//      5) 서보 1750→2500 (1초 sweep) → 서보 복귀 / IDLE
+//    Serial로 '1'~'6' 수신 → 해당 도미노 솔레노이드만 실행
+//      1) 솔레노이드 펄스 (MOSFET 채널 ON → 200ms → OFF) → 도미노 쓰러짐 → IDLE
+//    서보(도미노 일으켜 세우기)는 자동으로 동작하지 않으며, 별도의 서보
+//    raise-only 명령(XBee cmd 11~16 / 17)으로만 트리거된다.
+//      - 서보 2500→1750 (1.5초 sweep) → 도미노 일으켜 세움
+//      - 1초 유지
+//      - 서보 1750→2500 (0.5초 sweep) → 서보 복귀 / IDLE
+//    모든 트리거 명령은 busy 상태 체크 없이 즉시 실행되며, 진행 중인
+//    시퀀스가 있어도 새 명령이 오면 그 즉시 덮어쓴다.
 //
 //  핀 배치 (SMA Controller v1.6)
 //    MOSFET1 (솔레노이드 1) : pin 2
@@ -53,17 +56,20 @@ static const uint8_t SOL_PINS[6] = { 2, 3, 4, 5, 6, 7 };
 #define DOMINO6_AUX_CH_ENABLED 1 // 1: domino 6에서 ch6 동시 구동, 0: ch5만 사용
 #define SOL_PULSE_MS    200      // 솔레노이드 펄스 시간 (ms)
 #define SOL_STAGGER_MS   60      // 그룹 트리거 시 솔레노이드 시작 간격 (ms)
-#define WAIT_MS        5000      // 솔레노이드 OFF 후 서보 동작까지 대기 (ms)
 #define SWEEP_UP_MS    1500      // 서보 2500→1750 sweep 시간 (ms)
 #define HOLD_MS        1000      // 도미노 세운 후 유지 시간 (ms)
 #define SWEEP_DN_MS     500      // 서보 1750→2500 복귀 시간 (ms)
+
+// ── I2C(PCA9685) 헬스체크 / 재연결 파라미터 ──────────────────────────
+#define I2C_HEALTH_CHECK_MS  500  // 헬스체크 주기 (ms)
+#define I2C_FAIL_THRESHOLD     3  // 연속 실패 횟수 → 연결 끊김 판정
+#define I2C_RECONNECT_RETRY_MS 500 // 끊김 상태에서 재시도 간격 (ms)
 
 // ── 상태 머신 ────────────────────────────────────────────────────────
 enum DominoState : uint8_t {
   IDLE,
   SOL_QUEUED, // 솔레노이드 ON 대기 (전류 피크 분산)
   SOL_ON,     // 솔레노이드 ON 중
-  WAITING,    // 솔레노이드 OFF, 서보 동작 전 대기
   RAISING,    // 서보 2500→1750 sweep
   HOLDING,    // 서보 1750 유지
   RETURNING   // 서보 1750→2500 sweep
@@ -80,6 +86,11 @@ static char serialCmdBuf[32];
 static uint8_t serialCmdLen = 0;
 static uint8_t xbeePacket[4];
 static uint8_t xbeeIdx = 0;
+
+// ── I2C(PCA9685) 연결 상태 ────────────────────────────────────────────
+static bool     i2cConnected     = true;
+static uint8_t  i2cFailCount     = 0;
+static uint32_t lastI2CCheckMs   = 0;
 
 // ── 서보 쓰기 ────────────────────────────────────────────────────────
 inline uint16_t clampServoUs(uint16_t us) {
@@ -109,11 +120,52 @@ void resetAllDominos() {
   }
 }
 
-bool anyDominoBusy() {
-  for (uint8_t i = 0; i < 6; i++) {
-    if (dominos[i].state != IDLE) return true;
+// ── I2C(PCA9685) 헬스체크 / 재연결 ────────────────────────────────────
+// PCA9685에 실제 데이터를 쓰지 않고 주소만 호출해 응답 여부를 확인한다.
+bool pca9685Ping() {
+  Wire.beginTransmission(PCA9685_ADDR);
+  return Wire.endTransmission() == 0;
+}
+
+// PCA9685 재초기화를 시도하고, 성공하면 모든 도미노를 안전한 홈 상태로 되돌린다.
+bool attemptPCA9685Reconnect() {
+  pwm.begin();
+  pwm.setOscillatorFrequency(27000000);
+  pwm.setPWMFreq(SERVO_FREQ);
+  delay(5);
+
+  if (!pca9685Ping()) return false;
+
+  Serial.println("[INFO] PCA9685 재연결 성공 → 전체 서보 홈 리셋");
+  resetAllDominos();
+  return true;
+}
+
+// loop()에서 주기적으로 호출: I2C 연결 상태를 감시하고 끊기면 재연결을 시도한다.
+void checkI2CHealth() {
+  const uint32_t now = millis();
+  const uint32_t interval = i2cConnected ? I2C_HEALTH_CHECK_MS : I2C_RECONNECT_RETRY_MS;
+  if (now - lastI2CCheckMs < interval) return;
+  lastI2CCheckMs = now;
+
+  if (pca9685Ping()) {
+    i2cFailCount = 0;
+    i2cConnected = true;
+    return;
   }
-  return false;
+
+  if (i2cConnected) {
+    i2cFailCount++;
+    if (i2cFailCount >= I2C_FAIL_THRESHOLD) {
+      i2cConnected = false;
+      Serial.println("[ERROR] PCA9685 I2C 연결 끊김 감지 → 재연결 시도 시작");
+    }
+    return;
+  }
+
+  if (!attemptPCA9685Reconnect()) {
+    Serial.println("[WARN] PCA9685 재연결 시도 실패 → 다음 주기에 재시도");
+  }
 }
 
 void triggerDominoGroup(uint8_t mask) {
@@ -123,10 +175,6 @@ void triggerDominoGroup(uint8_t mask) {
   uint8_t queuedCount = 0;
   for (uint8_t i = 0; i < 6; i++) {
     if ((mask & (1u << i)) == 0) continue;
-    if (dominos[i].state != IDLE) {
-      Serial.printf("[WARN] domino %d already running — ignored\n", i + 1);
-      continue;
-    }
 
     uint32_t delayMs = (uint32_t)queuedCount * SOL_STAGGER_MS;
     dominos[i].state = SOL_QUEUED;
@@ -192,11 +240,6 @@ void processSerialCommandBuffer() {
   if (resetRequested) {
     resetAllDominos();
   } else if (selectedMask != 0) {
-    if (anyDominoBusy()) {
-      Serial.println("[BUSY] trigger ignored: previous sequence still running");
-      serialCmdLen = 0;
-      return;
-    }
     if (selectedMask == 0x3F) Serial.println("[CMD]  전체 도미노 트리거");
     triggerDominoGroup(selectedMask);
   }
@@ -205,12 +248,6 @@ void processSerialCommandBuffer() {
 }
 
 void processXBeeCommand(uint8_t cmd) {
-  const bool isSolenoidTriggerCmd = (cmd >= 1 && cmd <= 7);
-  if (isSolenoidTriggerCmd && anyDominoBusy()) {
-    Serial.printf("[XBEE][BUSY] cmd=%u ignored: previous sequence still running\n", cmd);
-    return;
-  }
-
   if (cmd >= 1 && cmd <= 6) {
     triggerDomino(static_cast<uint8_t>(cmd - 1));
     return;
@@ -289,15 +326,8 @@ void updateDomino(uint8_t i) {
     case SOL_ON:
       if (elapsed >= SOL_PULSE_MS) {
         digitalWrite(SOL_PINS[i], LOW);
-        Serial.printf("[INFO] domino %d: solenoid OFF → waiting %d ms\n", i + 1, WAIT_MS);
-        d.state = WAITING; d.stateStart = millis();
-      }
-      break;
-
-    case WAITING:
-      if (elapsed >= WAIT_MS) {
-        Serial.printf("[INFO] domino %d: raising (2500→1750 / %d ms)\n", i + 1, SWEEP_UP_MS);
-        d.state = RAISING; d.stateStart = millis();
+        Serial.printf("[INFO] domino %d: solenoid OFF → IDLE (servo raise는 별도 명령 필요)\n", i + 1);
+        d.state = IDLE;
       }
       break;
 
@@ -384,6 +414,8 @@ void loop() {
       }
     }
   }
+
+  checkI2CHealth();
 
   readXBeePacket();
 
