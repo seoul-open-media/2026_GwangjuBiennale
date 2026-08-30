@@ -25,8 +25,8 @@ flowchart LR
 
 | 폴더 | 종류 | 역할 |
 |---|---|---|
-| [Indeterministic_Float/](Indeterministic_Float/) | PlatformIO (Teensy 4.0) | 본 설치 부유 로봇, 3축 장력 평형 액추에이터 (ID 1~30) |
-| [IF_ceiling/](IF_ceiling/) | PlatformIO (Teensy 4.0) | 천장 설치형 변형 (ID 31~34), 스태거 없이 100% SMA 듀티 |
+| [Indeterministic_Float/](Indeterministic_Float/) | PlatformIO (Teensy 4.0) | 본 설치 부유 로봇, SMA 1축 상하운동 액추에이터 (ID 1~30) |
+| [IF_ceiling/](IF_ceiling/) | PlatformIO (Teensy 4.0) | 천장 설치형, 2개 구동기가 강선을 당겨 수평 포물선 굤적 운동 (ID 31~34), 100% SMA 듀티(비스태거) |
 | [IF_test/](IF_test/) | PlatformIO (Teensy 4.1) | 테스트/개발용 변형 (ID 13~18), OLED 미사용 |
 | [Bell_shaker/](Bell_shaker/) | PlatformIO (Teensy MicroMod) | Moteus 모터(CAN) 기반 종/타악 액추에이터 |
 | [Domino/](Domino/) | PlatformIO (Teensy 4.0) | 솔레노이드 6채널 + PCA9685 서보 도미노 컨트롤러 |
@@ -43,9 +43,9 @@ flowchart LR
 
 | 프로젝트 | 로봇 ID | 보드 | 핵심 하드웨어 |
 |---|---|---|---|
-| Indeterministic_Float | 1–30 | Teensy 4.0 | SMA 4채널, MLX90614 IR센서 2개(별도 I2C), 냉각팬, 리드스위치 |
-| IF_ceiling | 31–34 | Teensy 4.0 | 동일 하드웨어, 100% SMA 듀티(비스태거) |
-| IF_test | 13–18 | Teensy 4.1 | 동일 하드웨어, OLED 제외, 온도범위 10~60°C |
+| Indeterministic_Float | 1–30 | Teensy 4.0 | SMA 4채널(1축 상하운동 구동), MLX90614 IR센서 2개(별도 I2C), 냉각팬, 리드스위치 |
+| IF_ceiling | 31–34 | Teensy 4.0 | SMA 4채널(2개 구동기가 강선을 당겨 수평 포물선 굤적 구동), 100% SMA 듀티(비스태거) |
+| IF_test | 13–18 | Teensy 4.1 | Indeterministic_Float와 동일한 1축 구동 방식, OLED 제외, 온도범위 10~60°C |
 | Bell_shaker | — | Teensy MicroMod | Moteus R4 모터(CAN, ACAN2517FD), XBee flag `0xB1` |
 | Domino | — | Teensy 4.0 | 솔레노이드 6채널(핀 2~7), PCA9685 서보(I2C 0x40), XBee flag `0xD1` |
 | hardware_test | — | Teensy 4.0 | MOSFET 6채널, MLX90614×2, SSD1306 OLED |
@@ -56,7 +56,11 @@ flowchart LR
 
 ### Indeterministic_Float / IF_ceiling / IF_test — 유영(부유) 로봇
 
-SMA(형상기억합금) 와이어를 저항 가열해 3축 장력을 변화시켜 부유·유영 동작을 만드는 로봇입니다. 두 개의 MLX90614 적외선 센서로 각 SMA 축의 온도를 실시간 측정해 균형을 유지합니다.
+SMA(형상기억합금) 와이어를 저항 가열해 장력을 변화시켜 움직임을 만드는 로봇입니다. 두 개의 MLX90614 적외선 센서로 온도를 실시간 측정해 균형을 유지합니다. 프로젝트별 구동 방식이 다릅니다:
+
+- **Indeterministic_Float**: SMA 1축 구동으로 로봇을 상하로 움직이는 상하운동 액추에이터
+- **IF_ceiling**: 천장에 고정된 2개의 SMA 구동기가 강선(steel wire)을 각각 당겨, 로봇이 수평 방향의 포물선 궤적을 그리며 움직이는 방식
+- **IF_test**: Indeterministic_Float과 동일한 1축 상하운동 방식의 테스트/개발용 변형
 
 - **XBee 명령**: `RESET`, `HEAT_ON`, `HEAT_OFF`, `FAN_ON speed=n`, `FAN_OFF`, `SET`(파라미터 적용), `PRESET:n`, `SOUND:n`
 - **프리셋(PRESET:n) 동작 목록**:
@@ -70,7 +74,6 @@ SMA(형상기억합금) 와이어를 저항 가열해 3축 장력을 변화시�
   | 6 | 순차 재생 — 2→3→4번을 2분(`SEQ_PRESET_DURATION_MS`)마다 순환 |
   | 7 | 랜덤 재생 — 2/3/4번 중 무작위로 2분마다 전환 |
 - **사운드(SOUND:n)**: `0`=정지, `1`=사운드1 1회, `2`=사운드1 루프, `3`=사운드2 1회, `4`=사운드2 루프
-- **차이점**: IF_ceiling은 스태거 없이 SMA 100% 듀티(천장 고정이라 전류 여유), IF_test는 OLED 미사용 + 온도범위 10~60°C로 넓게 설정된 개발용 변형
 
 ### Bell_shaker — 종/타악 액추에이터
 
