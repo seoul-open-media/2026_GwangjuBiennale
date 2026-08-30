@@ -26,7 +26,7 @@ flowchart LR
 | 폴더 | 종류 | 역할 |
 |---|---|---|
 | [Indeterministic_Float/](Indeterministic_Float/) | PlatformIO (Teensy 4.0) | 본 설치 부유 로봇, SMA 1축 상하운동 액추에이터 (ID 1~30) |
-| [IF_ceiling/](IF_ceiling/) | PlatformIO (Teensy 4.0) | 천장 설치형, 2개 구동기가 강선을 당겨 수평 포물선 굤적 운동 (ID 31~34), 100% SMA 듀티(비스태거) |
+| [IF_ceiling/](IF_ceiling/) | PlatformIO (Teensy 4.0) | 천장 설치형, 2개 구동기가 강선을 당겨 수평 포물선 궤적 운동 (ID 31~34), 100% SMA 듀티(비스태거) |
 | [IF_test/](IF_test/) | PlatformIO (Teensy 4.1) | 테스트/개발용 변형 (ID 13~18), OLED 미사용 |
 | [Bell_shaker/](Bell_shaker/) | PlatformIO (Teensy MicroMod) | Moteus 모터(CAN) 기반 종/타악 액추에이터 |
 | [Domino/](Domino/) | PlatformIO (Teensy 4.0) | 솔레노이드 6채널 + PCA9685 서보 도미노 컨트롤러 |
@@ -44,7 +44,7 @@ flowchart LR
 | 프로젝트 | 로봇 ID | 보드 | 핵심 하드웨어 |
 |---|---|---|---|
 | Indeterministic_Float | 1–30 | Teensy 4.0 | SMA 4채널(1축 상하운동 구동), MLX90614 IR센서 2개(별도 I2C), 냉각팬, 리드스위치 |
-| IF_ceiling | 31–34 | Teensy 4.0 | SMA 4채널(2개 구동기가 강선을 당겨 수평 포물선 굤적 구동), 100% SMA 듀티(비스태거) |
+| IF_ceiling | 31–34 | Teensy 4.0 | SMA 4채널(2개 구동기가 강선을 당겨 수평 포물선 궤적 구동), 100% SMA 듀티(비스태거) |
 | IF_test | 13–18 | Teensy 4.1 | Indeterministic_Float와 동일한 1축 구동 방식, OLED 제외, 온도범위 10~60°C |
 | Bell_shaker | — | Teensy MicroMod | Moteus R4 모터(CAN, ACAN2517FD), XBee flag `0xB1` |
 | Domino | — | Teensy 4.0 | 솔레노이드 6채널(핀 2~7), PCA9685 서보(I2C 0x40), XBee flag `0xD1` |
