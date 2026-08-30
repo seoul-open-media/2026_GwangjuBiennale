@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GB16 스텝 운영 매뉴얼</title>
+  <style>
+    body { font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; color: #111; margin: 28px; line-height: 1.6; }
+    h1 { font-size: 24px; margin: 0 0 12px; }
+    h2 { font-size: 17px; margin: 22px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+    p, li { font-size: 12px; }
+    .note { background: #f5f7fa; border: 1px solid #dce3ea; border-radius: 6px; padding: 8px 10px; font-size: 11px; }
+    .tag { display: inline-block; border: 1px solid #bbb; border-radius: 4px; padding: 1px 6px; font-size: 11px; margin-right: 6px; }
+    ul { margin: 6px 0 6px 18px; }
+    ol { margin: 6px 0 6px 18px; }
+  </style>
+</head>
+<body>
+  <h1>GB16 2026 광주비엔날레 - 스텝 운영 매뉴얼</h1>
+
+  <h2>1. 접속 주소</h2>
+  <ul>
+    <li>외부 제어: https://gb16.ngrok-free.dev/gb16_control.html</li>
+    <li>외부 모니터: https://gb16.ngrok-free.dev/dashboard.html</li>
+    <li>내부 제어: http://192.168.0.18:8182/gb16_control.html</li>
+    <li>내부 모니터: http://192.168.0.18:8182/dashboard.html</li>
+  </ul>
+  <p class="note">외부 주소는 모바일 데이터 포함 어디서나 접속 가능, 내부 주소는 전시장 Wi-Fi 연결 시 사용.</p>
+
+  <h2>2. 공연 시작 / 자동 실행</h2>
+  <ol>
+    <li>제어 패널 접속 후 상단 상태가 "MQTT 연결됨"인지 확인.</li>
+    <li>공연 제어에서 관객감지 ON 확인.</li>
+    <li>커스텀 타임라인 스텝이 비어있지 않은지 확인.</li>
+    <li>관객이 없음 -> 있음으로 바뀌는 순간 커스텀 타임라인 1회 자동 실행.</li>
+    <li>즉시 테스트는 커스텀 타임라인의 [실행] 버튼 사용.</li>
+  </ol>
+
+  <h2>3. 주요 제어 버튼</h2>
+  <ul>
+    <li><span class="tag">공연 시작 (전체 ON)</span>전원 그룹 1 -> 2 -> 3 순서로 전체 ON.</li>
+    <li><span class="tag">전시 마감 (전체 OFF)</span>확인 경고창에서 확인해야 전체 OFF 실행.</li>
+    <li><span class="tag">전체 스톱</span>커스텀 중단 + SOUND 정지 + RESET(all) 재전송.</li>
+    <li><span class="tag">HEAT_ON</span>현재 파라미터 SET 후 가열 시작.</li>
+    <li><span class="tag">HEAT_OFF</span>가열 중지.</li>
+    <li><span class="tag">RESET</span>선택 대상 리셋.</li>
+  </ul>
+
+  <h2>4. 전원 제어 그룹</h2>
+  <ul>
+    <li>그룹 1: IF + Bellshaker + Light1 (192.168.0.100)</li>
+    <li>그룹 2: Domino (192.168.0.101)</li>
+    <li>그룹 3: IF Ceiling + Light2 (192.168.0.102)</li>
+  </ul>
+
+  <h2>5. 트러블슈팅</h2>
+  <ul>
+    <li>카드가 흐릿함(오프라인): 해당 그룹 전원 [↺] 재시작 후 30~60초 대기.</li>
+    <li>ERR 상태: 해당 그룹 전원 [↺] 재시작.</li>
+    <li>관객 감지되는데 시작 안 됨: 관객감지 ON / 스텝 존재 / MQTT 연결 확인.</li>
+    <li>전체 응답 없음: [전체 스톱] 후 작가 연락.</li>
+  </ul>
+
+  <h2>6. 긴급 연락</h2>
+  <p>작가 권병준 · 010 2393 1030</p>
+</body>
+</html>

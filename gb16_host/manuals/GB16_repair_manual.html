@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GB16 수리 스텝 상세 매뉴얼</title>
+  <style>
+    body { font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; color: #111; margin: 28px; line-height: 1.6; }
+    h1 { font-size: 24px; margin: 0 0 12px; }
+    h2 { font-size: 17px; margin: 22px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+    p, li { font-size: 12px; }
+    .note { background: #f5f7fa; border: 1px solid #dce3ea; border-radius: 6px; padding: 8px 10px; font-size: 11px; }
+    .btn { display: inline-block; border: 1px solid #bbb; border-radius: 4px; padding: 1px 6px; font-size: 11px; margin-right: 6px; }
+    ul { margin: 6px 0 6px 18px; }
+    ol { margin: 6px 0 6px 18px; }
+  </style>
+</head>
+<body>
+  <h1>GB16 수리 스텝 상세 매뉴얼 (버튼 기능 전체)</h1>
+
+  <h2>0. 수리 전 공통 체크</h2>
+  <ol>
+    <li>상단 상태가 "MQTT 연결됨"인지 확인.</li>
+    <li>수리 중 오동작 방지를 위해 필요 시 [전체 스톱] 먼저 실행.</li>
+    <li>대상 그룹(1/2/3)과 실제 장치 라벨 일치 확인.</li>
+  </ol>
+
+  <h2>1. 개별 전원 버튼 기능</h2>
+  <ul>
+    <li><span class="btn">1 ON</span>192.168.0.100 (IF + Bellshaker + Light1) 전원 켜기</li>
+    <li><span class="btn">1 OFF</span>192.168.0.100 전원 끄기</li>
+    <li><span class="btn">1 ↺</span>192.168.0.100 전원 재시작</li>
+    <li><span class="btn">2 ON</span>192.168.0.101 (Domino) 전원 켜기</li>
+    <li><span class="btn">2 OFF</span>192.168.0.101 전원 끄기</li>
+    <li><span class="btn">2 ↺</span>192.168.0.101 전원 재시작</li>
+    <li><span class="btn">3 ON</span>192.168.0.102 (IF Ceiling + Light2) 전원 켜기</li>
+    <li><span class="btn">3 OFF</span>192.168.0.102 전원 끄기</li>
+    <li><span class="btn">3 ↺</span>192.168.0.102 전원 재시작</li>
+  </ul>
+
+  <h2>2. 전시 전원 일괄 버튼</h2>
+  <ul>
+    <li><span class="btn">전시 시작 (전체 ON)</span>1 -> 2 -> 3 순서로 전체 ON 전송</li>
+    <li><span class="btn">전시 마감 (전체 OFF)</span>확인창에서 확인 시 1 -> 2 -> 3 순서로 전체 OFF 전송</li>
+  </ul>
+  <p class="note">전시 마감 확인창에서 취소하면 전원 상태는 변경되지 않습니다.</p>
+
+  <h2>3. 공연/명령 버튼 기능</h2>
+  <ul>
+    <li><span class="btn">시작</span>커스텀 타임라인 즉시 실행</li>
+    <li><span class="btn">전체 스톱</span>커스텀 중단 + SOUND STOP + RESET(all) + RESET 재전송</li>
+    <li><span class="btn">HEAT_ON</span>SET 후 가열 시작</li>
+    <li><span class="btn">HEAT_OFF</span>가열 중지</li>
+    <li><span class="btn">RESET</span>선택 대상 리셋</li>
+    <li><span class="btn">FAN_ON</span>팬 단독 ON</li>
+    <li><span class="btn">FAN_OFF</span>팬 OFF</li>
+    <li><span class="btn">SET 전송</span>파라미터 반영만 수행</li>
+    <li><span class="btn">스태거드 시작/중단</span>분할 구동 시작/중단</li>
+  </ul>
+
+  <h2>4. 수리 표준 절차</h2>
+  <ol>
+    <li>증상 그룹 확인</li>
+    <li>해당 그룹 [↺] 1회 실행 후 30~60초 대기</li>
+    <li>복구 실패 시 [OFF] 5초 후 [ON]</li>
+    <li>복수 장애면 [전시 마감] -> 확인 -> [전시 시작]</li>
+    <li>여전히 실패하면 [전체 스톱] 후 작가 연락</li>
+  </ol>
+
+  <h2>5. 긴급 연락</h2>
+  <p>작가 권병준 · 010 2393 1030</p>
+</body>
+</html>

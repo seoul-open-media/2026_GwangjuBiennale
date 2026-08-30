@@ -98,10 +98,9 @@ for _k, _v in os.environ.items():
         try: TAPO_PLUG_MAP[int(_k[len('TAPO_GROUP_'):])] = _v.strip()
         except ValueError: pass
 TAPO_GROUP_NAMES: dict = {
-    1: '비결정적 유영 A',
-    2: '비결정적 유영 B',
-    3: 'IF Ceiling',
-    4: '기타',
+    1: 'IF + Bellshaker + Light1 (192.168.0.100)',
+    2: 'Domino (192.168.0.101)',
+    3: 'IF Ceiling + Light2 (192.168.0.102)',
 }
 
 # ─── Logging ──────────────────────────────────────────
@@ -888,13 +887,17 @@ def telegram_send(msg: str):
 
 def _tapo_reset_thread(group_id: int):
     name = TAPO_GROUP_NAMES.get(group_id, f'그룹{group_id}')
+    log.info(f"[POWER] reset start group={group_id} name={name}")
     ok   = reset_group_sync(group_id)
+    log.info(f"[POWER] reset {'ok' if ok else 'fail'} group={group_id} name={name}")
     telegram_send(f"{'✅' if ok else '❌'} {name} 전원 리셋 {'완료' if ok else '실패'}")
 
 def _tapo_power_thread(group_id: int, on: bool):
     name  = TAPO_GROUP_NAMES.get(group_id, f'그룹{group_id}')
     label = 'ON' if on else 'OFF'
+    log.info(f"[POWER] {label} start group={group_id} name={name}")
     ok    = set_group_power_sync(group_id, on)
+    log.info(f"[POWER] {label} {'ok' if ok else 'fail'} group={group_id} name={name}")
     telegram_send(f"{'✅' if ok else '❌'} {name} 전원 {label} {'완료' if ok else '실패'}")
 
 
@@ -929,10 +932,10 @@ def handle_telegram_command(text: str, mqtt_client):
         try:
             gid = int(parts[1])
         except ValueError:
-            telegram_send("⚠️ 사용법: /power <1~5>")
+            telegram_send("⚠️ 사용법: /power <1~3>")
             return
         if gid not in TAPO_GROUP_NAMES:
-            telegram_send(f"⚠️ 그룹 번호는 1~4 (받은 값: {gid})")
+            telegram_send(f"⚠️ 그룹 번호는 1~3 (받은 값: {gid})")
             return
         name = TAPO_GROUP_NAMES[gid]
         telegram_send(f"🔌 {name} 전원 리셋 시작...")
@@ -1301,6 +1304,7 @@ def on_message(client, userdata, message):
             except ValueError:
                 log.warning(f"[POWER] invalid group id: {parts[3]}")
                 return
+            log.info(f"[POWER] mqtt topic={topic} payload={payload!r}")
             if payload == 'on':
                 threading.Thread(target=_tapo_power_thread, args=(group_id, True), daemon=True).start()
             elif payload == 'off':

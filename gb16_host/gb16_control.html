@@ -953,7 +953,7 @@ body {
 }
 
 /* ── 매뉴얼 모달 ─────────────────────────────────────────────────── */
-#manual-overlay {
+#manual-overlay, #repair-overlay {
   display: none;
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.72);
@@ -963,8 +963,8 @@ body {
   padding: 16px;
   box-sizing: border-box;
 }
-#manual-overlay.open { display: flex; }
-#manual-box {
+#manual-overlay.open, #repair-overlay.open { display: flex; }
+#manual-box, #repair-box {
   background: #0d101c;
   border: 1px solid #2a3050;
   border-radius: 10px;
@@ -974,22 +974,22 @@ body {
   box-shadow: 0 8px 40px rgba(0,0,0,0.7);
   overflow: hidden;
 }
-#manual-header {
+#manual-header, #repair-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid #1e2235;
   background: #0b0e1a;
   flex-shrink: 0;
 }
-#manual-header h2 { font-size: 0.95rem; color: #7eb8f7; margin: 0; }
-#manual-close {
+#manual-header h2, #repair-header h2 { font-size: 0.95rem; color: #7eb8f7; margin: 0; }
+#manual-close, #repair-close {
   background: transparent; border: none;
   color: #556; font-size: 1.2rem; cursor: pointer;
   padding: 2px 8px; border-radius: 4px;
   line-height: 1;
 }
-#manual-close:hover { background: #1e2235; color: #c8cfe8; }
-#manual-body {
+#manual-close:hover, #repair-close:hover { background: #1e2235; color: #c8cfe8; }
+#manual-body, #repair-body {
   overflow-y: auto;
   padding: 16px;
   flex: 1;
@@ -1066,7 +1066,7 @@ body {
 }
 .man-step-text { font-size: 0.78rem; color: #c8cfe8; }
 @media (max-width: 600px) {
-  #manual-box { max-height: 95vh; }
+  #manual-box, #repair-box { max-height: 95vh; }
   .man-url-label { width: 58px; }
 }
 </style>
@@ -1079,6 +1079,7 @@ body {
   <div id="mqtt-status">MQTT 연결 중...</div>
   <button onclick="toggleAccessPanel()" title="접속 URL 복사" style="font-size:0.75rem;padding:3px 8px;border:1px solid #7eb8f744;border-radius:4px;background:transparent;color:#7eb8f7;cursor:pointer;">🔗 접속정보</button>
   <button onclick="toggleManual()" title="스텝 매뉴얼" style="font-size:0.75rem;padding:3px 8px;border:1px solid #69f0ae44;border-radius:4px;background:transparent;color:#69f0ae;cursor:pointer;">📋 매뉴얼</button>
+  <button onclick="toggleRepairManual()" title="수리 스텝 상세 매뉴얼" style="font-size:0.75rem;padding:3px 8px;border:1px solid #ffcc0244;border-radius:4px;background:transparent;color:#ffcc02;cursor:pointer;">🧰 수리 매뉴얼</button>
   <a href="dashboard.html" target="_blank" rel="noopener">📊 모니터링</a>
 </div>
 <!-- ── 접속 정보 패널 ────────────────────────────────────────────────────── -->
@@ -1205,11 +1206,11 @@ body {
       <!-- 전원 제어 -->
       <div class="man-section">
         <h3>⚡ 전원 제어 (스마트 플러그)</h3>
-        <div class="man-note" style="margin-bottom:7px;">[전원 제어] 섹션에서 그룹별 ON · OFF · ↺ 재시작</div>
-        <div class="man-row"><span class="man-key info">1</span><span class="man-val">비결정적 유영 A</span></div>
-        <div class="man-row"><span class="man-key info">2</span><span class="man-val">비결정적 유영 B</span></div>
-        <div class="man-row"><span class="man-key info">3</span><span class="man-val">IF Ceiling</span></div>
-        <div class="man-row"><span class="man-key info">4</span><span class="man-val">기타</span></div>
+        <div class="man-note" style="margin-bottom:7px;">[전원 제어] 섹션에서 항목별 ON · OFF · ↺ 재시작, [전시 시작]으로 전체 ON, [전시 마감]으로 전체 OFF</div>
+        <div class="man-row"><span class="man-key info">1</span><span class="man-val">IF + Bellshaker + Light1 (192.168.0.100)</span></div>
+        <div class="man-row"><span class="man-key info">2</span><span class="man-val">Domino (192.168.0.101)</span></div>
+        <div class="man-row"><span class="man-key info">3</span><span class="man-val">IF Ceiling + Light2 (192.168.0.102)</span></div>
+        <div class="man-row"><span class="man-key warn">전시 마감</span><span class="man-val">클릭 시 "정말로 마감하겠냐" 확인창이 뜨며, 확인해야 전체 OFF 실행</span></div>
       </div>
 
       <!-- 사운드 -->
@@ -1231,6 +1232,7 @@ body {
         <h3>🆘 트러블슈팅</h3>
         <div class="man-row"><span class="man-key err">로봇 카드 흐릿함</span><span class="man-val">[전원 제어] 해당 번호 [↺] 재시작 → 30~60초 대기</span></div>
         <div class="man-row"><span class="man-key err">ERR 상태 로봇</span><span class="man-val">[전원 제어] 해당 번호 [↺] 재시작</span></div>
+        <div class="man-row"><span class="man-key info">수리 절차</span><span class="man-val">상단 [🧰 수리 매뉴얼]에서 버튼별 상세 절차 확인</span></div>
         <div class="man-row"><span class="man-key warn">관객 감지되는데 시작 안 됨</span><span class="man-val">관객감지 ON / 커스텀 스텝 존재 / MQTT 연결 상태 3가지 확인</span></div>
         <div class="man-row"><span class="man-key err">전체 응답 없음</span><span class="man-val">[⏹ 전체 스톱] 후 작가에게 연락</span></div>
         <div class="man-row"><span class="man-key warn">패널 접속 불가</span><span class="man-val">Wi-Fi 또는 데이터 연결 확인 · 내부 주소 재시도</span></div>
@@ -1241,13 +1243,89 @@ body {
       <!-- 긴급 연락 -->
       <div class="man-section">
         <h3>📞 긴급 연락</h3>
-        <div class="man-row"><span class="man-key info">작가</span><span class="man-val">김창겸 · 010-____-____</span></div>
+        <div class="man-row"><span class="man-key info">작가</span><span class="man-val">권병준 · 010 2393 1030</span></div>
         <div class="man-note">잘못 눌러도 [⏹ 전체 스톱]으로 언제든 초기화 가능합니다.</div>
       </div>
 
     </div><!-- /manual-body -->
   </div><!-- /manual-box -->
 </div><!-- /manual-overlay -->
+
+<!-- ── 수리 스텝 매뉴얼 모달 ─────────────────────────────────────────────── -->
+<div id="repair-overlay" onclick="repairOverlayClick(event)">
+  <div id="repair-box">
+    <div id="repair-header">
+      <h2>🧰 GB16 수리 스텝 상세 매뉴얼 (버튼 기능 전체)</h2>
+      <button id="repair-close" onclick="closeRepairManual()">✕</button>
+    </div>
+    <div id="repair-body">
+
+      <div class="man-section">
+        <h3>0) 수리 전 공통 체크</h3>
+        <div class="man-row"><span class="man-key info">1</span><span class="man-val">상단 상태가 "✅ MQTT 연결됨"인지 확인</span></div>
+        <div class="man-row"><span class="man-key info">2</span><span class="man-val">수리 중 오동작 방지를 위해 필요 시 [⏹ 전체 스톱] 먼저 실행</span></div>
+        <div class="man-row"><span class="man-key warn">3</span><span class="man-val">전원 작업 전 대상 그룹(1/2/3)과 실제 장치 라벨 일치 확인</span></div>
+      </div>
+
+      <div class="man-section">
+        <h3>1) 전원 제어 버튼 기능 (개별)</h3>
+        <div class="man-row"><span class="man-key info">1 ON</span><span class="man-val">192.168.0.100: IF + Bellshaker + Light1 전원 켜기</span></div>
+        <div class="man-row"><span class="man-key warn">1 OFF</span><span class="man-val">192.168.0.100: IF + Bellshaker + Light1 전원 끄기</span></div>
+        <div class="man-row"><span class="man-key">1 ↺</span><span class="man-val">192.168.0.100: 전원 재시작 (꺼짐 후 자동 켜짐)</span></div>
+        <div class="man-row"><span class="man-key info">2 ON</span><span class="man-val">192.168.0.101: Domino 전원 켜기</span></div>
+        <div class="man-row"><span class="man-key warn">2 OFF</span><span class="man-val">192.168.0.101: Domino 전원 끄기</span></div>
+        <div class="man-row"><span class="man-key">2 ↺</span><span class="man-val">192.168.0.101: Domino 전원 재시작</span></div>
+        <div class="man-row"><span class="man-key info">3 ON</span><span class="man-val">192.168.0.102: IF Ceiling + Light2 전원 켜기</span></div>
+        <div class="man-row"><span class="man-key warn">3 OFF</span><span class="man-val">192.168.0.102: IF Ceiling + Light2 전원 끄기</span></div>
+        <div class="man-row"><span class="man-key">3 ↺</span><span class="man-val">192.168.0.102: IF Ceiling + Light2 전원 재시작</span></div>
+      </div>
+
+      <div class="man-section">
+        <h3>2) 전시 전원 일괄 버튼</h3>
+        <div class="man-row"><span class="man-key info">전시 시작 (전체 ON)</span><span class="man-val">1→2→3 순서로 전체 전원 ON 명령 전송</span></div>
+        <div class="man-row"><span class="man-key warn">전시 마감 (전체 OFF)</span><span class="man-val">확인창에서 확인 시 1→2→3 순서로 전체 OFF 전송</span></div>
+        <div class="man-note">전시 마감 확인창에서 취소하면 어떤 전원도 변경되지 않습니다.</div>
+      </div>
+
+      <div class="man-section">
+        <h3>3) 공연 제어 버튼</h3>
+        <div class="man-row"><span class="man-key info">▶ 시작</span><span class="man-val">커스텀 타임라인 즉시 실행 시작</span></div>
+        <div class="man-row"><span class="man-key warn">⏹ 전체 스톱</span><span class="man-val">커스텀 중단 + SOUND STOP + RESET(all) + 2초 후 RESET 재전송</span></div>
+        <div class="man-row"><span class="man-key">관객감지 ON/OFF</span><span class="man-val">ON이면 감지 트리거 허용, OFF면 자동 실행 차단</span></div>
+      </div>
+
+      <div class="man-section">
+        <h3>4) 그룹/명령 버튼</h3>
+        <div class="man-row"><span class="man-key info">그룹 선택</span><span class="man-val">전체34 / 유영전체(1-30) / 천장(31-34) / 해제</span></div>
+        <div class="man-row"><span class="man-key">🔥 HEAT_ON</span><span class="man-val">현재 파라미터 SET 후 가열 시작</span></div>
+        <div class="man-row"><span class="man-key">❄ HEAT_OFF</span><span class="man-val">가열 중지</span></div>
+        <div class="man-row"><span class="man-key">⛔ RESET</span><span class="man-val">선택 대상 리셋</span></div>
+        <div class="man-row"><span class="man-key">💨 FAN_ON</span><span class="man-val">팬 단독 ON (현재 팬값 사용)</span></div>
+        <div class="man-row"><span class="man-key">🚫 FAN_OFF</span><span class="man-val">팬 OFF</span></div>
+        <div class="man-row"><span class="man-key">📋 SET 전송</span><span class="man-val">슬라이더/체크 파라미터만 반영</span></div>
+        <div class="man-row"><span class="man-key">🎲 스태거드 시작</span><span class="man-val">설정값으로 분할 구동 시작</span></div>
+        <div class="man-row"><span class="man-key warn">⏹ 스태거드 중단</span><span class="man-val">스태거드 운용만 중단</span></div>
+      </div>
+
+      <div class="man-section">
+        <h3>5) 프리셋/사운드 버튼</h3>
+        <div class="man-row"><span class="man-key info">프리셋 1~4</span><span class="man-val">선택 그룹에 PRESET 실행</span></div>
+        <div class="man-row"><span class="man-key info">♪ 1~4</span><span class="man-val">트랙 즉시 재생</span></div>
+        <div class="man-row"><span class="man-key warn">■ STOP</span><span class="man-val">사운드 페이드아웃 후 정지</span></div>
+      </div>
+
+      <div class="man-section">
+        <h3>6) 수리 표준 절차</h3>
+        <div class="man-step"><div class="man-num">1</div><div class="man-step-text">증상 발생 그룹을 전원 섹션에서 확인</div></div>
+        <div class="man-step"><div class="man-num">2</div><div class="man-step-text">해당 그룹 [↺] 1회 실행 후 30~60초 대기</div></div>
+        <div class="man-step"><div class="man-num">3</div><div class="man-step-text">복구 실패 시 [OFF] 5초 후 [ON] 순차 수행</div></div>
+        <div class="man-step"><div class="man-num">4</div><div class="man-step-text">여러 그룹 이상 장애면 [전시 마감] → 확인 → [전시 시작] 순서 적용</div></div>
+        <div class="man-step"><div class="man-num">5</div><div class="man-step-text">여전히 실패하면 [⏹ 전체 스톱] 후 작가 연락</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 
 <!-- ── 메인 ──────────────────────────────────────────────────────────────── -->
@@ -1315,6 +1393,42 @@ body {
       </div>
       <div id="aud-action-log" style="font-size:0.67rem;color:#69f0ae;margin-top:4px;min-height:1.4em;line-height:1.4;word-break:break-all"></div>
       </div>
+    </div>
+
+    <!-- 전원 제어 -->
+    <div class="ctrl-section">
+      <h3>전원 제어 (Tapo P110M)</h3>
+      <div class="pwr-grid">
+        <div class="pwr-row">
+          <span class="pwr-name"><span class="pwr-id">1</span> IF + Bellshaker + Light1 (192.168.0.100)</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on" onclick="sendPower(1, 'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(1, 'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(1, 'reset')">↺</button>
+          </div>
+        </div>
+        <div class="pwr-row">
+          <span class="pwr-name"><span class="pwr-id">2</span> Domino (192.168.0.101)</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on" onclick="sendPower(2, 'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(2, 'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(2, 'reset')">↺</button>
+          </div>
+        </div>
+        <div class="pwr-row">
+          <span class="pwr-name"><span class="pwr-id">3</span> IF Ceiling + Light2 (192.168.0.102)</span>
+          <div class="pwr-btns">
+            <button class="pbr btn-on" onclick="sendPower(3, 'on')">ON</button>
+            <button class="pbr btn-off" onclick="sendPower(3, 'off')">OFF</button>
+            <button class="pbr btn-rst" onclick="sendPower(3, 'reset')">↺</button>
+          </div>
+        </div>
+      </div>
+      <div class="perf-btns" style="margin-top:8px;">
+        <button class="perf-btn perf-start" onclick="exhibitionStartPowerOn()">전시 시작 (전체 ON)</button>
+        <button class="perf-btn perf-stop" onclick="exhibitionClosePowerOff()">전시 마감 (전체 OFF)</button>
+      </div>
+      <div id="pwr-log">대기 중...</div>
     </div>
 
     <!-- 그룹 선택 -->
@@ -1673,6 +1787,15 @@ function closeManual() {
 function manualOverlayClick(e) {
   if (e.target === document.getElementById('manual-overlay')) closeManual();
 }
+function toggleRepairManual() {
+  document.getElementById('repair-overlay').classList.toggle('open');
+}
+function closeRepairManual() {
+  document.getElementById('repair-overlay').classList.remove('open');
+}
+function repairOverlayClick(e) {
+  if (e.target === document.getElementById('repair-overlay')) closeRepairManual();
+}
 function manCopy(id, btn) {
   const text = document.getElementById(id).textContent.trim();
   navigator.clipboard.writeText(text).then(() => {
@@ -1719,7 +1842,7 @@ const OFFLINE_TIMEOUT = 15000;  // ms
 // ── 자동 전원리셋 ────────────────────────────────────────────────────────────
 // 작품 그룹별 Tapo 전원 그룹 매핑
 const GROUP_ROBOT_IDS = { ifa: IF_IDS_A, ifb: IF_IDS_B, if: IF_IDS, ceil: IF_CEIL };
-const GROUP_TAPO      = { gf: 1, gp1: 2, gp2: 3, if: 4 };
+const GROUP_TAPO      = { ifa: 1, ifb: 1, if: 1, ceil: 3 };
 const AUTO_ERR_MS     = 30_000;           // 에러 지속 임계 (30s)
 const AUTO_RESET_COOLDOWN_MS = 120_000;   // 자동리셋 후 재발동 방지 (2min)
 const autoResetEnabled = { gf: false, gp1: false, gp2: false, if: false };
@@ -3054,23 +3177,53 @@ function initSchedule() {
 
 // ── 전원 제어 (Tapo) ────────────────────────────────────────────────────────
 const GROUP_NAMES = {
-  1: '비결정적 유영 A',
-  2: '비결정적 유영 B',
-  3: 'IF Ceiling',
-  4: '기타',
+  1: 'IF + Bellshaker + Light1 (192.168.0.100)',
+  2: 'Domino (192.168.0.101)',
+  3: 'IF Ceiling + Light2 (192.168.0.102)',
 };
 
-function sendPower(groupId, action) {
+const EXHIBITION_POWER_GROUPS = [1, 2, 3];
+
+function _pwrLog(msg) {
   const plog = document.getElementById('pwr-log');
+  if (plog) plog.textContent = msg;
+}
+
+function sendPower(groupId, action) {
   if (!mqttClient || !mqttClient.connected) {
-    plog.textContent = '⚠ MQTT 미연결 — 전원 제어 불가';
+    _pwrLog('⚠ MQTT 미연결 — 전원 제어 불가');
     return;
   }
   const name   = GROUP_NAMES[groupId] || `그룹${groupId}`;
   const labels = { on: 'ON (켜기)', off: 'OFF (끄기)', reset: '재시작 (↺)' };
   mqttClient.publish(`gb16/power/group/${groupId}`, action, { qos: 1 });
   const icons = { on: '✅', off: '🔴', reset: '⏳' };
-  plog.textContent = `${icons[action]} ${groupId} [${name}] ${labels[action]}`;
+  _pwrLog(`${icons[action]} ${groupId} [${name}] ${labels[action]}`);
+}
+
+function _sendPowerBatch(action, title) {
+  if (!mqttClient || !mqttClient.connected) {
+    _pwrLog('⚠ MQTT 미연결 — 전원 제어 불가');
+    return;
+  }
+  EXHIBITION_POWER_GROUPS.forEach((gid, idx) => {
+    setTimeout(() => sendPower(gid, action), idx * 250);
+  });
+  const stateLabel = action === 'on' ? '전체 ON' : '전체 OFF';
+  _pwrLog(`⏳ ${title}: ${stateLabel} 명령 전송 중...`);
+}
+
+function exhibitionStartPowerOn() {
+  _sendPowerBatch('on', '전시 시작');
+}
+
+function exhibitionClosePowerOff() {
+  const ok = confirm('전시 마감: 모든 전원을 OFF 하시겠습니까?\n( IF, Bellshaker, Light1, Domino, IF Ceiling, Light2 )');
+  if (!ok) {
+    _pwrLog('전시 마감 취소됨');
+    return;
+  }
+  _sendPowerBatch('off', '전시 마감');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
