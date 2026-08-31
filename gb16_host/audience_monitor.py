@@ -223,14 +223,32 @@ class AudienceMonitor:
             info.wait_for_publish(timeout=2)
 
     def _detect_people(self, frame: np.ndarray) -> tuple[np.ndarray, int, bool]:
-        result = self.model.predict(
-            source=frame,
-            conf=self.cfg.detect_conf,
-            classes=[0],
-            verbose=False,
-            imgsz=640,
-            device=self.device,
-        )[0]
+        def _predict_once() -> object:
+            return self.model.predict(
+                source=frame,
+                conf=self.cfg.detect_conf,
+                classes=[0],
+                verbose=False,
+                imgsz=640,
+                device=self.device,
+            )[0]
+
+        try:
+            result = _predict_once()
+        except Exception as e:
+            if self.device != "cpu":
+                # CUDA 상태가 일시적으로 불안정한 현장 환경에서 추론 루프가
+                # 죽지 않도록 CPU로 자동 폴백한다.
+                log.warning("YOLO predict failed on %s: %s. Falling back to CPU.", self.device, e)
+                self.device = "cpu"
+                try:
+                    result = _predict_once()
+                except Exception as e2:
+                    log.error("YOLO predict failed after CPU fallback: %s", e2)
+                    return frame, 0, False
+            else:
+                log.error("YOLO predict failed on CPU: %s", e)
+                return frame, 0, False
 
         person_count = 0
         annotated = frame.copy()

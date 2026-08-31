@@ -547,6 +547,13 @@ void loop() {
     }
 
     case COOLING: {
+      // 팬 전용 모드에서는 자동 정지(저점 도달/타임아웃)를 적용하지 않는다.
+      // 정지는 새 명령(FAN_OFF/RESET/다른 모드)로만 수행한다.
+      if (cmd.fanOnly) {
+        coolAmbMs = 0;
+        break;
+      }
+
       // 저점온도 기준: targetTempMin이 설정되어 있으면 그 값, 아니면 ambTemp+0.5
       float coolTarget = (cmd.targetTempMin >= 10 && cmd.targetTempMin <= 30)
                          ? (float)cmd.targetTempMin

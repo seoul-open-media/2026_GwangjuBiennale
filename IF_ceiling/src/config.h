@@ -15,7 +15,7 @@
 // ── PWM ─────────────────────────────────────────────────────────────
 #define SMA_PWM_MAX     100          // (255 기준) — 고정 운전 전류
 #define SMA_PWM_FREQ    100u         // 100 Hz — 스위칭 EMI 최소화 (초지향성 스피커 노이즈 저감)
-#define FAN_PWM_FREQ  15000u         // 15 kHz (팬은 가청 노이즈 방지 위해 고주파 유지)
+#define FAN_PWM_FREQ  16000u         // 16 kHz
 #define SMA_BALANCE_THRESH  2.0f     // 두 센서 허용 온도차 (°C) — 초과 시 앞선 그룹 OFF
 #define HEAT_BALANCE_GRACE_MS 3000UL // 가열 시작 후 균형제어 유예 시간 (ms)
 #define TEMP_TARGET_MIN 40u          // 목표온도 하한 (°C)

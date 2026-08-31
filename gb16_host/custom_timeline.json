@@ -1,0 +1,55 @@
+{
+  "savedAt": 1788134969608,
+  "steps": [
+    {
+      "t": 0,
+      "target": "ceil",
+      "action": "ceil_if_play"
+    },
+    {
+      "t": 60,
+      "target": "if",
+      "action": "if_stagger_play"
+    },
+    {
+      "t": 180,
+      "target": "ceil",
+      "action": "ceil_if_stop"
+    },
+    {
+      "t": 240,
+      "target": "ceil",
+      "action": "ceil_if_play"
+    },
+    {
+      "t": 360,
+      "target": "if",
+      "action": "if_stagger_stop"
+    },
+    {
+      "t": 420,
+      "target": "ceil",
+      "action": "ceil_if_stop"
+    },
+    {
+      "t": 480,
+      "target": "ceil",
+      "action": "ceil_if_play"
+    },
+    {
+      "t": 600,
+      "target": "if",
+      "action": "if_stagger_play"
+    },
+    {
+      "t": 730,
+      "target": "ceil",
+      "action": "ceil_if_stop"
+    },
+    {
+      "t": 730,
+      "target": "if",
+      "action": "if_stagger_stop"
+    }
+  ]
+}

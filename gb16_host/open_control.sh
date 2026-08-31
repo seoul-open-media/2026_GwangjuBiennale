@@ -12,12 +12,19 @@ for i in $(seq 1 $MAX_WAIT); do
 done
 
 # Chromium/Chrome 우선, 없으면 Firefox
-CHROME_FLAGS="--disable-gpu --disable-software-rasterizer --disable-infobars --disable-session-crashed-bubble --no-first-run --no-default-browser-check --noerrdialogs --disable-translate --user-data-dir=/tmp/gb16-chrome-profile"
+# --kiosk: 주소창/탭 없는 완전 전체화면
+# --start-fullscreen: WM/환경에 따라 kiosk가 적용되지 않을 때 보조
+CHROME_FLAGS="--kiosk --start-fullscreen --disable-gpu --disable-software-rasterizer --disable-infobars --disable-session-crashed-bubble --no-first-run --no-default-browser-check --noerrdialogs --disable-translate --user-data-dir=/tmp/gb16-chrome-profile"
 
-if command -v google-chrome &>/dev/null; then
+if command -v google-chrome-stable &>/dev/null; then
+    exec google-chrome-stable $CHROME_FLAGS "$CONTROL_URL"
+elif command -v google-chrome &>/dev/null; then
     exec google-chrome $CHROME_FLAGS "$CONTROL_URL"
 elif command -v chromium-browser &>/dev/null; then
     exec chromium-browser $CHROME_FLAGS "$CONTROL_URL"
+elif command -v chromium &>/dev/null; then
+    exec chromium $CHROME_FLAGS "$CONTROL_URL"
 elif command -v firefox &>/dev/null; then
-    exec firefox "$CONTROL_URL"
+    # Firefox kiosk 모드
+    exec firefox --kiosk "$CONTROL_URL"
 fi

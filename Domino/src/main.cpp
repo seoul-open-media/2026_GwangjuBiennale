@@ -91,6 +91,13 @@ static uint8_t xbeeIdx = 0;
 static bool     i2cConnected     = true;
 static uint8_t  i2cFailCount     = 0;
 static uint32_t lastI2CCheckMs   = 0;
+// ── I2C/PCA9685 감시·복구 ─────────────────────────────────────────────
+static bool pcaReady = false;
+static uint32_t lastPcaHealthCheckMs = 0;
+static uint32_t lastPcaRecoverTryMs = 0;
+static uint16_t pcaRecoverCount = 0;
+
+static constexpr uint16_t I2C_RECOVER_GUARD_MS = 500;
 
 // ── 서보 쓰기 ────────────────────────────────────────────────────────
 inline uint16_t clampServoUs(uint16_t us) {
@@ -99,8 +106,58 @@ inline uint16_t clampServoUs(uint16_t us) {
   return constrain(us, low, high);
 }
 
-inline void servoWrite(uint8_t ch, uint16_t us) {
+inline void servoWriteRaw(uint8_t ch, uint16_t us) {
   pwm.writeMicroseconds(ch, clampServoUs(us));
+}
+
+bool pcaPing() {
+  Wire.beginTransmission(PCA9685_ADDR);
+  return Wire.endTransmission() == 0;
+}
+
+bool initPca9685() {
+  pwm.begin();
+  pwm.setOscillatorFrequency(27000000);
+  pwm.setPWMFreq(SERVO_FREQ);
+  delay(10);
+  return pcaPing();
+}
+
+bool recoverPca9685(const char* reason) {
+  const uint32_t now = millis();
+  if (now - lastPcaRecoverTryMs < I2C_RECOVER_GUARD_MS) {
+    return pcaReady;
+  }
+  lastPcaRecoverTryMs = now;
+
+  Serial.printf("[I2C] PCA9685 recovery start (%s)\n", reason);
+
+  // Teensy에서는 Wire.begin() 재호출로 버스 재초기화를 시도한다.
+  Wire.begin();
+  Wire.setClock(100000);
+  pcaReady = initPca9685();
+
+  if (pcaReady) {
+    pcaRecoverCount++;
+    Serial.printf("[I2C] PCA9685 recovery OK (count=%u)\n", pcaRecoverCount);
+  } else {
+    Serial.println("[I2C] PCA9685 recovery FAIL");
+  }
+  return pcaReady;
+}
+
+bool ensurePcaReady(const char* reason) {
+  if (pcaReady) {
+    return true;
+  }
+  return recoverPca9685(reason);
+}
+
+inline void servoWrite(uint8_t ch, uint16_t us) {
+  if (!ensurePcaReady("servoWrite")) {
+    return;
+  }
+  servoWriteRaw(ch, us);
 }
 
 inline void servoWriteDomino(uint8_t dominoIdx, uint16_t us) {
@@ -364,6 +421,17 @@ void updateDomino(uint8_t i) {
   }
 }
 
+void monitorAndRecoverI2C() {
+  const uint32_t now = millis();
+  if (now - lastPcaHealthCheckMs < I2C_HEALTH_CHECK_MS) return;
+  lastPcaHealthCheckMs = now;
+
+  if (!pcaPing()) {
+    pcaReady = false;
+    recoverPca9685("health-check");
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
@@ -379,10 +447,11 @@ void setup() {
 
   // PCA9685 초기화
   Wire.begin();
-  pwm.begin();
-  pwm.setOscillatorFrequency(27000000);
-  pwm.setPWMFreq(SERVO_FREQ);
-  delay(10);
+  Wire.setClock(100000);
+  pcaReady = initPca9685();
+  if (!pcaReady) {
+    Serial.println("[WARN] PCA9685 not responding at boot; auto-recovery enabled");
+  }
 
   // 기본 서보 채널(0~5) + 마지막 도미노 보조 채널(6) 홈 위치로
   for (int i = 0; i < 6; i++) servoWriteDomino(i, SERVO_HOME);
@@ -418,6 +487,7 @@ void loop() {
   checkI2CHealth();
 
   readXBeePacket();
+  monitorAndRecoverI2C();
 
   // 6개 도미노 상태 머신 업데이트
   for (int i = 0; i < 6; i++) updateDomino(i);
