@@ -61,9 +61,9 @@ static const uint8_t SOL_PINS[6] = { 2, 3, 4, 5, 6, 7 };
 #define SWEEP_DN_MS     500      // 서보 1750→2500 복귀 시간 (ms)
 
 // ── I2C(PCA9685) 헬스체크 / 재연결 파라미터 ──────────────────────────
-#define I2C_HEALTH_CHECK_MS  500  // 헬스체크 주기 (ms)
+#define I2C_HEALTH_CHECK_MS  500  // 정상 연결 상태에서 헬스체크 주기 (ms)
 #define I2C_FAIL_THRESHOLD     3  // 연속 실패 횟수 → 연결 끊김 판정
-#define I2C_RECONNECT_RETRY_MS 500 // 끊김 상태에서 재시도 간격 (ms)
+#define I2C_RECOVER_GUARD_MS  500  // 끊김 상태에서 재시도 간격 (ms)
 
 // ── 상태 머신 ────────────────────────────────────────────────────────
 enum DominoState : uint8_t {
@@ -87,17 +87,12 @@ static uint8_t serialCmdLen = 0;
 static uint8_t xbeePacket[4];
 static uint8_t xbeeIdx = 0;
 
-// ── I2C(PCA9685) 연결 상태 ────────────────────────────────────────────
-static bool     i2cConnected     = true;
-static uint8_t  i2cFailCount     = 0;
-static uint32_t lastI2CCheckMs   = 0;
-// ── I2C/PCA9685 감시·복구 ─────────────────────────────────────────────
-static bool pcaReady = false;
+// ── I2C/PCA9685 감시·복구 (단일 시스템, 500ms 주기 1회만 폴링) ────────
+static bool     pcaReady             = false;
+static uint8_t  i2cFailCount         = 0;
 static uint32_t lastPcaHealthCheckMs = 0;
-static uint32_t lastPcaRecoverTryMs = 0;
-static uint16_t pcaRecoverCount = 0;
-
-static constexpr uint16_t I2C_RECOVER_GUARD_MS = 500;
+static uint32_t lastPcaRecoverTryMs  = 0;
+static uint16_t pcaRecoverCount      = 0;
 
 // ── 서보 쓰기 ────────────────────────────────────────────────────────
 inline uint16_t clampServoUs(uint16_t us) {
@@ -109,6 +104,8 @@ inline uint16_t clampServoUs(uint16_t us) {
 inline void servoWriteRaw(uint8_t ch, uint16_t us) {
   pwm.writeMicroseconds(ch, clampServoUs(us));
 }
+
+void resetAllDominos(); // forward decl (recoverPca9685에서 사용)
 
 bool pcaPing() {
   Wire.beginTransmission(PCA9685_ADDR);
@@ -139,7 +136,9 @@ bool recoverPca9685(const char* reason) {
 
   if (pcaReady) {
     pcaRecoverCount++;
-    Serial.printf("[I2C] PCA9685 recovery OK (count=%u)\n", pcaRecoverCount);
+    i2cFailCount = 0;
+    Serial.printf("[I2C] PCA9685 recovery OK (count=%u) → 전체 서보 홈 리셋\n", pcaRecoverCount);
+    resetAllDominos();
   } else {
     Serial.println("[I2C] PCA9685 recovery FAIL");
   }
@@ -174,54 +173,6 @@ void resetAllDominos() {
     dominos[i].state = IDLE;
     digitalWrite(SOL_PINS[i], LOW);
     servoWriteDomino(i, SERVO_HOME);
-  }
-}
-
-// ── I2C(PCA9685) 헬스체크 / 재연결 ────────────────────────────────────
-// PCA9685에 실제 데이터를 쓰지 않고 주소만 호출해 응답 여부를 확인한다.
-bool pca9685Ping() {
-  Wire.beginTransmission(PCA9685_ADDR);
-  return Wire.endTransmission() == 0;
-}
-
-// PCA9685 재초기화를 시도하고, 성공하면 모든 도미노를 안전한 홈 상태로 되돌린다.
-bool attemptPCA9685Reconnect() {
-  pwm.begin();
-  pwm.setOscillatorFrequency(27000000);
-  pwm.setPWMFreq(SERVO_FREQ);
-  delay(5);
-
-  if (!pca9685Ping()) return false;
-
-  Serial.println("[INFO] PCA9685 재연결 성공 → 전체 서보 홈 리셋");
-  resetAllDominos();
-  return true;
-}
-
-// loop()에서 주기적으로 호출: I2C 연결 상태를 감시하고 끊기면 재연결을 시도한다.
-void checkI2CHealth() {
-  const uint32_t now = millis();
-  const uint32_t interval = i2cConnected ? I2C_HEALTH_CHECK_MS : I2C_RECONNECT_RETRY_MS;
-  if (now - lastI2CCheckMs < interval) return;
-  lastI2CCheckMs = now;
-
-  if (pca9685Ping()) {
-    i2cFailCount = 0;
-    i2cConnected = true;
-    return;
-  }
-
-  if (i2cConnected) {
-    i2cFailCount++;
-    if (i2cFailCount >= I2C_FAIL_THRESHOLD) {
-      i2cConnected = false;
-      Serial.println("[ERROR] PCA9685 I2C 연결 끊김 감지 → 재연결 시도 시작");
-    }
-    return;
-  }
-
-  if (!attemptPCA9685Reconnect()) {
-    Serial.println("[WARN] PCA9685 재연결 시도 실패 → 다음 주기에 재시도");
   }
 }
 
@@ -423,13 +374,27 @@ void updateDomino(uint8_t i) {
 
 void monitorAndRecoverI2C() {
   const uint32_t now = millis();
-  if (now - lastPcaHealthCheckMs < I2C_HEALTH_CHECK_MS) return;
+  const uint32_t interval = pcaReady ? I2C_HEALTH_CHECK_MS : I2C_RECOVER_GUARD_MS;
+  if (now - lastPcaHealthCheckMs < interval) return;
   lastPcaHealthCheckMs = now;
 
-  if (!pcaPing()) {
-    pcaReady = false;
-    recoverPca9685("health-check");
+  if (pcaPing()) {
+    i2cFailCount = 0;
+    return;
   }
+
+  if (pcaReady) {
+    // 연결된 상태에서의 일시적 실패는 threshold까지 카운트만 하고,
+    // 즉시 재연결을 시도하지 않아 순간적 노이즈로 인한 오탐을 줄인다.
+    i2cFailCount++;
+    if (i2cFailCount >= I2C_FAIL_THRESHOLD) {
+      pcaReady = false;
+      Serial.println("[ERROR] PCA9685 I2C 연결 끊김 감지 → 재연결 시도 시작");
+    }
+    return;
+  }
+
+  recoverPca9685("health-check");
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -464,6 +429,10 @@ void setup() {
 }
 
 void loop() {
+  // XBee 패킷 수신을 최우선으로 처리해 I2C 헬스체크 등으로 인한 지연으로
+  // UART 수신 버퍼가 넘쳐 패킷이 유실되는 것을 방지한다.
+  readXBeePacket();
+
   // 시리얼 커맨드: 줄바꿈(Enter) 기준으로만 처리해 타이핑 중 오작동 방지
   while (Serial.available() > 0) {
     char c = Serial.read();
@@ -484,9 +453,6 @@ void loop() {
     }
   }
 
-  checkI2CHealth();
-
-  readXBeePacket();
   monitorAndRecoverI2C();
 
   // 6개 도미노 상태 머신 업데이트
