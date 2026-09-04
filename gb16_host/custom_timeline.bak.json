@@ -1,5 +1,5 @@
 {
-  "savedAt": 1788134969608,
+  "savedAt": 1788489685657,
   "steps": [
     {
       "t": 0,
@@ -37,19 +37,24 @@
       "action": "ceil_if_play"
     },
     {
-      "t": 600,
+      "t": 570,
       "target": "if",
-      "action": "if_stagger_play"
+      "action": "if_all_play"
     },
     {
-      "t": 730,
+      "t": 680,
+      "target": "if",
+      "action": "if_fan_on"
+    },
+    {
+      "t": 740,
+      "target": "if",
+      "action": "if_all_stop"
+    },
+    {
+      "t": 740,
       "target": "ceil",
       "action": "ceil_if_stop"
-    },
-    {
-      "t": 730,
-      "target": "if",
-      "action": "if_stagger_stop"
     }
   ]
 }

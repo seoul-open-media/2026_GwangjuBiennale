@@ -1344,7 +1344,7 @@ body {
       <div class="mode-select-row audience-toggle-row">
         <label>관객감지</label>
         <div class="aud-toggle-wrap">
-          <input type="checkbox" id="aud-enable" onchange="onAudienceToggle(this)">
+          <input type="checkbox" id="aud-enable" checked onchange="onAudienceToggle(this)">
           <span id="aud-enable-text">ON</span>
         </div>
       </div>
@@ -1570,7 +1570,7 @@ body {
         </div>
         <div class="param-row" style="margin-top:6px">
           <label>목표온도</label>
-          <input type="number" id="stg-temp" min="40" max="50" value="40">
+          <input type="number" id="stg-temp" min="40" max="50" value="43">
           <span class="param-val">40-50</span>
         </div>
         <div class="check-row" style="margin-bottom:0">
@@ -1880,9 +1880,11 @@ function _loadAutoMode() {
   if (!modeEl) return;
   try {
     const saved = localStorage.getItem(_AUTO_MODE_KEY);
-    if (saved && ['MANUAL', 'AUTO', 'ADAPTIVE'].includes(saved)) {
+    // 관객감지는 페이지 로드 시 기본 ON으로 유지한다.
+    // 이전에 MANUAL(OFF)이 저장되어 있어도 복원하지 않는다.
+    if (saved && ['AUTO', 'ADAPTIVE'].includes(saved)) {
       modeEl.value = saved;
-      if (saved !== 'MANUAL') _lastAutoMode = saved;
+      _lastAutoMode = saved;
     }
   } catch(e) {}
 }
@@ -2105,7 +2107,8 @@ function handleAudience(present, wasRetained = false) {
     visitHistory.push(Date.now());
     updateFreqBar();
     if (_customRunning) {
-      logAudAction('👥 관객 감지 — 공연 진행 중(추가 실행 없음)');
+      _midShowAudienceDetected = true;
+      logAudAction('👥 관객 감지 — 공연 진행 중 (종료 후 처음부터 재생 예약)');
       return;
     }
     _readStepsFromUI();
@@ -2466,9 +2469,12 @@ function _logDemo(msg) {
 // ═══════════════════════════════════════════════════════════════════════════
 //  커스텀 타임라인
 // ═══════════════════════════════════════════════════════════════════════════
-let _customSteps   = [];   // [{t:seconds, target:'if'|'ceil', action:'if_stagger_play'|'if_stagger_stop'|'ceil_if_play'|'ceil_if_stop'}]
+let _customSteps   = [];   // [{t:seconds, target:'if'|'ceil', action:'if_all_play'|'if_all_stop'|'if_fan_on'|'if_fan_off'|'if_stagger_play'|'if_stagger_stop'|'ceil_if_play'|'ceil_if_stop'}]
 let _customRunning = false;
 let _customTimers  = [];
+let _customRunToken = 0;
+// 공연 도중 관객이 다시 감지되면 종료 후 처음부터 1회 재생 예약
+let _midShowAudienceDetected = false;
 let _customTickId  = null;
 let _customStartMs = 0;
 let _customSaveDebounceId = null;
@@ -2494,6 +2500,10 @@ const _CS_TARGET_OPTS = [
 ];
 const _CS_ACTION_OPTS_BY_TARGET = {
   if: [
+    ['if_all_play', 'IF 전체 플레이'],
+    ['if_all_stop', 'IF 전체 스톱'],
+    ['if_fan_on', 'IF 전체 팬온'],
+    ['if_fan_off', 'IF 전체 팬오프'],
     ['if_stagger_play', '스태거드 플레이'],
     ['if_stagger_stop', '스태거드 스톱'],
   ],
@@ -2552,6 +2562,35 @@ function _sendCeilStopReliable() {
   sendPass('1차');
   setTimeout(() => sendPass('2차'), 350);
   setTimeout(() => sendPass('3차'), 1200);
+}
+
+function _sendIfAllPlayReliable() {
+  const ids = IF_IDS_A.concat(IF_IDS_B);
+  const cmd = 'SET temp=43 sust=5 fan=255 pwm=60';
+
+  const sendPass = (label) => {
+    ids.forEach(id => publish(id, cmd));
+    ids.forEach(id => publish(id, 'HEAT_ON'));
+    logCmd(`[IF 전체 플레이] ${label} SET+HEAT_ON (${ids.length}대) — pwm=60 temp=43 sust=5 fan=255`);
+  };
+
+  sendPass('1차');
+  setTimeout(() => sendPass('2차'), 350);
+  setTimeout(() => sendPass('3차'), 1200);
+}
+
+function _sendIfAllFanOn() {
+  const ids = IF_IDS_A.concat(IF_IDS_B);
+  const fan = parseInt((document.getElementById('if-fan') || {}).value || '255', 10);
+  const speed = Math.max(0, Math.min(255, fan));
+  ids.forEach(id => publish(id, `FAN_ON speed=${speed}`));
+  logCmd(`[IF 전체 팬온] FAN_ON speed=${speed} (${ids.length}대)`);
+}
+
+function _sendIfAllFanOff() {
+  const ids = IF_IDS_A.concat(IF_IDS_B);
+  ids.forEach(id => publish(id, 'FAN_OFF'));
+  logCmd(`[IF 전체 팬오프] FAN_OFF (${ids.length}대)`);
 }
 
 function _onCustomTargetChange(idx, target) {
@@ -2691,7 +2730,19 @@ function _readStepsFromUI() {
 
 function _execCustomStep(step) {
   let actionLabel = step.action;
-  if (step.target === 'if' && step.action === 'if_stagger_play') {
+  if (step.target === 'if' && step.action === 'if_all_play') {
+    _sendIfAllPlayReliable();
+    actionLabel = 'IF 전체 플레이';
+  } else if (step.target === 'if' && step.action === 'if_all_stop') {
+    staggerStopAndResetIF();
+    actionLabel = 'IF 전체 스톱';
+  } else if (step.target === 'if' && step.action === 'if_fan_on') {
+    _sendIfAllFanOn();
+    actionLabel = 'IF 전체 팬온';
+  } else if (step.target === 'if' && step.action === 'if_fan_off') {
+    _sendIfAllFanOff();
+    actionLabel = 'IF 전체 팬오프';
+  } else if (step.target === 'if' && step.action === 'if_stagger_play') {
     // 중복/잔류 스태거드를 방지하기 위해 시작 직전 정지 신호를 1회 보낸다.
     if (mqttClient && mqttClient.connected) {
       mqttClient.publish("gb16/all/cmd", "STAGGER_STOP", { qos: 1 });
@@ -2767,13 +2818,20 @@ function _renderCustomSteps() {
 }
 
 function startCustom() {
+  if (_customRunning) {
+    _logCustom('ℹ 이미 실행 중 — 재시작 요청은 종료 후 처리');
+    return;
+  }
   _readStepsFromUI();
   if (_customSteps.length === 0) { alert('스텝이 없습니다. 먼저 스텝을 추가하세요.'); return; }
   if (!mqttClient || !mqttClient.connected) { alert('MQTT에 연결되지 않았습니다.'); return; }
 
   _customRunning = true;
+  _customRunToken += 1;
+  const runToken = _customRunToken;
   _customStartMs = Date.now();
   _customTimers  = [];
+  _midShowAudienceDetected = false;
   _updateCustomUI();
   _sendPdCue('커스텀 타임라인 시작');
 
@@ -2782,17 +2840,24 @@ function startCustom() {
 
   _customSteps.forEach(step => {
     const tid = setTimeout(() => {
-      if (_customRunning) _execCustomStep(step);
+      if (_customRunning && runToken === _customRunToken) _execCustomStep(step);
     }, step.t * 1000);
     _customTimers.push(tid);
   });
 
   // 마지막 스텝 후 1초에 자동 종료
   const endTid = setTimeout(() => {
-    if (_customRunning) {
+    if (_customRunning && runToken === _customRunToken) {
       _customRunning = false;
+      _customTimers = [];
       _updateCustomUI();
       _logCustom('✅ 완료');
+      const audEnabled = !!document.getElementById('aud-enable')?.checked;
+      if (_midShowAudienceDetected && audEnabled) {
+        _midShowAudienceDetected = false;
+        logAudAction('👥 공연 중 관객 재감지 — 전체 공연 처음부터 재생');
+        startCustom();
+      }
     }
   }, (maxT + 1) * 1000);
   _customTimers.push(endTid);
@@ -2803,8 +2868,10 @@ function startCustom() {
 function stopCustom() {
   _customTimers.forEach(t => clearTimeout(t));
   _customTimers = [];
+  _customRunToken += 1;
   if (_customTickId) { clearInterval(_customTickId); _customTickId = null; }
   _customRunning = false;
+  _midShowAudienceDetected = false;
   _updateCustomUI();
   _logCustom('⏹ 중단');
   _sendPdCue('커스텀 중단', 0);
@@ -3320,6 +3387,9 @@ function parseLog(payload, wasRetained = false) {
     if (k && v !== undefined) kv[k] = v;
   }
   const r    = robots[rid];
+  const tsSec = parseInt(kv.ts || '0', 10);
+  const incomingLastSeen = Number.isFinite(tsSec) && tsSec > 0 ? tsSec * 1000 : Date.now();
+  const isOfflineSnapshot = wasRetained || (Date.now() - incomingLastSeen > OFFLINE_TIMEOUT);
   r.state    = kv.state  || r.state;
   r.state2   = kv.state2 || r.state2;
   r.s1       = kv.s1    != null ? parseFloat(kv.s1)    : r.s1;
@@ -3328,7 +3398,7 @@ function parseLog(payload, wasRetained = false) {
   const prevFault = r.fault;
   r.fault    = parseInt(kv.fault  ?? r.fault);
   r.code     = parseInt(kv.code   ?? r.code);
-  if (r.fault && r.fault !== prevFault) {
+  if (!isOfflineSnapshot && r.fault && r.fault !== prevFault) {
     const FAULT_NAMES = {
       11:'MLX1 FAIL', 12:'MLX1 FROZEN', 13:'MLX1 INIT', 14:'MLX1 SPIKE',
       21:'MLX2 FAIL', 22:'MLX2 FROZEN', 23:'MLX2 INIT', 24:'MLX2 I2C RECOVER', 25:'MLX2 SPIKE',
@@ -3338,7 +3408,11 @@ function parseLog(payload, wasRetained = false) {
   }
   // 자동리셋용 에러 타이머: fault > 0 이면 에러 시작 시각 기록
   const isErr = r.fault > 0;
-  if (isErr) {
+  if (isOfflineSnapshot) {
+    // 전원 꺼짐/오래된 retained 스냅샷은 에러 추적에서 제외
+    delete errorSince[rid];
+    delete faultClearAt[rid];
+  } else if (isErr) {
     delete faultClearAt[rid];             // 진행 중인 클리어 예약 취소
     if (errorSince[rid] == null) errorSince[rid] = Date.now();
   } else {
@@ -3354,8 +3428,7 @@ function parseLog(payload, wasRetained = false) {
     // 리로드 직후 retained 스냅샷은 오래된 상태일 수 있으므로 즉시 오프라인 취급
     r.lastSeen = null;
   } else {
-    const tsSec = parseInt(kv.ts || '0', 10);
-    r.lastSeen = Number.isFinite(tsSec) && tsSec > 0 ? tsSec * 1000 : Date.now();
+    r.lastSeen = incomingLastSeen;
     r._liveSeen = true;
   }
 
@@ -3422,7 +3495,14 @@ function connectMqtt(useAlt) {
       const rid = parseInt(ackMatch[1], 10);
       const rLabel = `R${String(rid).padStart(2,'0')}`;
       if (_text.startsWith('TIMEOUT:')) {
-        logError('error', `${rLabel} CMD 무응답(TIMEOUT): ${_text.slice(8)}`);
+        const r = robots[rid];
+        const isOffline = !r || !r.lastSeen || (Date.now() - r.lastSeen > OFFLINE_TIMEOUT);
+        if (isOffline) return;
+        const timeoutCmd = _text.slice(8).trim().toUpperCase();
+        // 사운드는 더 이상 이 호스트 관할이 아니므로 SOUND 계열 TIMEOUT은 오류로그에서 제외
+        if (!timeoutCmd.startsWith('SOUND:') && !timeoutCmd.startsWith('VOLUME:')) {
+          logError('error', `${rLabel} CMD 무응답(TIMEOUT): ${_text.slice(8)}`);
+        }
       }
       return;
     }
@@ -3729,7 +3809,7 @@ function staggerStart() {
   var useTemp  = !!((document.getElementById('stg-use-temp') || {}).checked);
   var fan      = parseInt((document.getElementById('stg-fan') || {}).value || "255");
   var pwm      = parseInt((document.getElementById('stg-pwm') || {}).value || "60");
-  var temp     = parseInt((document.getElementById('stg-temp') || {}).value || "40");
+  var temp     = parseInt((document.getElementById('stg-temp') || {}).value || "43");
 
   if (isNaN(interval) || interval < 1) interval = 20;
   if (isNaN(grp) || grp < 1) grp = 5;
