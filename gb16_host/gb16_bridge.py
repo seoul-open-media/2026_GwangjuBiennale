@@ -363,6 +363,9 @@ def db_cleanup():
 #  통계 HTTP API  (GET /api/stats?period=hour|day|week|month)
 # ═══════════════════════════════════════════════════════
 STATS_API_PORT = int(os.getenv('STATS_API_PORT', '8182'))
+# 외부(ngrok) 접속용 프록시 대상: 로컬 Mosquitto WebSocket, 카메라 MJPEG/스냅샷 서버
+MQTT_WS_LOCAL_PORT = int(os.getenv('MQTT_LOCAL_PORT', '9001'))
+CAMERA_LOCAL_PORT  = int(os.getenv('AUDIENCE_STREAM_PORT', '8181'))
 CUSTOM_TIMELINE_FILE = Path(os.getenv('CUSTOM_TIMELINE_FILE', str(Path(STATIC_DIR) / 'custom_timeline.json')))
 CUSTOM_TIMELINE_BAK_FILE = Path(os.getenv('CUSTOM_TIMELINE_BAK_FILE', str(Path(STATIC_DIR) / 'custom_timeline.bak.json')))
 PD_CUE_FILE = Path(os.getenv('PD_CUE_FILE', str(Path(STATIC_DIR) / 'pd_cue.json')))
@@ -765,11 +768,64 @@ class StatsHandler(BaseHTTPRequestHandler):
                 log.error(f"[PD CUE] save failed: {e}")
             self._send_json(500, {'ok': False, 'error': 'save_failed'})
 
+    def _proxy_mqtt_ws(self):
+        """/mqtt WebSocket 업그레이드를 로컬 Mosquitto(9001)로 그대로 중계 (ngrok 단일 터널용)."""
+        import select
+        try:
+            upstream = socket.create_connection(('127.0.0.1', MQTT_WS_LOCAL_PORT), timeout=5)
+        except OSError:
+            self.send_error(502)
+            return
+        req = f"GET {self.path} HTTP/1.1\r\n" + ''.join(
+            f"{k}: {v}\r\n" for k, v in self.headers.items()) + "\r\n"
+        client = self.connection
+        try:
+            upstream.sendall(req.encode('latin-1'))
+            upstream.settimeout(None)
+            client.settimeout(None)
+            self.close_connection = True
+            while True:
+                readable, _, _ = select.select([client, upstream], [], [], 60)
+                for s in readable:
+                    data = s.recv(65536)
+                    if not data:
+                        return
+                    (upstream if s is client else client).sendall(data)
+        except OSError:
+            pass
+        finally:
+            upstream.close()
+
+    def _proxy_snapshot(self, path: str):
+        """/snapshot{,1,2}.jpeg 를 로컬 카메라 서버(8181)로 중계."""
+        try:
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{CAMERA_LOCAL_PORT}{path}", timeout=5) as resp:
+                body = resp.read()
+            code = 200
+        except Exception:
+            body, code = b'', 503
+        self.send_response(code)
+        self.send_header('Content-Type', 'image/jpeg')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
     def do_GET(self):
         import urllib.parse as up
         import mimetypes
         parsed = up.urlparse(self.path)
         path   = parsed.path
+
+        if path == '/mqtt' and 'websocket' in self.headers.get('Upgrade', '').lower():
+            self._proxy_mqtt_ws()
+            return
+
+        if path in ('/snapshot.jpeg', '/snapshot1.jpeg', '/snapshot2.jpeg'):
+            self._proxy_snapshot(path)
+            return
 
         if path == '/api/stats':
             params = dict(up.parse_qsl(parsed.query))

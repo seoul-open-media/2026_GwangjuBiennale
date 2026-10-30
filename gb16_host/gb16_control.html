@@ -1766,7 +1766,7 @@ body {
 // ═══════════════════════════════════════════════════════════════════════════
 const BROKER     = 'ws://192.168.0.18:9001/mqtt';
 const BROKER_ALT = 'ws://localhost:9001/mqtt';
-const BROKER_EXT = 'wss://k890ff91.ala.asia-southeast1.emqxsl.com:8084/mqtt';  // 외부 접속용 (ngrok 경유)
+const BROKER_EXT = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/mqtt';  // 외부 접속용: ngrok 도메인의 /mqtt → gb16_bridge 프록시 → 로컬 Mosquitto
 const SCHEDULE_ENABLED = false; // 이번 전시에서는 공연 일정 기능 비활성화
 
 const mqttBrokerOverride = '';

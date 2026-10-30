@@ -8,7 +8,8 @@ Requires=gb16-bridge.service
 Type=simple
 WorkingDirectory=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host
 EnvironmentFile=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/.env
-ExecStart=/snap/bin/ngrok http --domain=${NGROK_DOMAIN} ${STATS_PORT}
+# snap ngrok은 AppArmor가 DNS(UDP)를 막아 터널이 안 올라오므로 비-snap 바이너리 사용
+ExecStart=%h/.local/bin/ngrok http --url=${NGROK_DOMAIN} ${STATS_PORT} --traffic-policy-file=%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/ngrok_policy.yml --log=stdout --log-format=logfmt
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:%h/Documents/GitHub/2026_GwangjuBiennale/gb16_host/logs/ngrok.log

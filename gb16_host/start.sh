@@ -72,7 +72,11 @@ STATS_PORT="${STATS_PORT:-8182}"
 
 if [ -n "$NGROK_DOMAIN" ] && [ "$NGROK_DOMAIN" != "YOUR_NGROK_DOMAIN_HERE" ]; then
     pkill -f "ngrok.*$STATS_PORT" 2>/dev/null; sleep 1
-    ngrok http --domain="$NGROK_DOMAIN" "$STATS_PORT" \
+    # ngrok v3 권장 옵션(--url) 사용
+    NGROK_BIN="$HOME/.local/bin/ngrok"; [ -x "$NGROK_BIN" ] || NGROK_BIN=ngrok
+    # 외부 접속 기본 인증 (ngrok_policy.yml 에 아이디/비밀번호 저장, git 제외)
+    "$NGROK_BIN" http --url="$NGROK_DOMAIN" "$STATS_PORT" \
+        --traffic-policy-file="$SCRIPT_DIR/ngrok_policy.yml" \
         >> "$LOG_DIR/ngrok.log" 2>&1 &
     NGROK_PID=$!
     echo $NGROK_PID > "$LOG_DIR/ngrok.pid"
